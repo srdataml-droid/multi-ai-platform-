@@ -28,7 +28,11 @@ def _channels(slug: str) -> dict[str, ChannelConfig]:
         "webchat": ChannelConfig(enabled=True),
         "twilio_sms": ChannelConfig(
             enabled=True,
-            config={"number": "+15005550006" if slug == "demo-hvac" else "+15005550007"},
+            config={
+                "number": {"demo-hvac": "+15005550006", "demo-dental": "+15005550007"}.get(
+                    slug, "+15005550008"
+                )
+            },
         ),
         "email": ChannelConfig(
             enabled=True,
@@ -49,13 +53,19 @@ def _settings(pack_id: str, slug: str) -> TenantSettings:
             Service(code="estimate", name="Estimate visit", duration_minutes=45),
         ]
         area = ["SW1", "SW2", "SW3", "SE1"]
-    else:
+    elif pack_id == "dental":
         services = [
             Service(code="checkup", name="Check-up", duration_minutes=20),
             Service(code="hygiene", name="Hygienist", duration_minutes=30),
             Service(code="emergency", name="Emergency appointment", duration_minutes=30),
         ]
         area = []
+    else:
+        services = [
+            Service(code="inspection", name="Damage inspection", duration_minutes=60),
+            Service(code="emergency_mitigation", name="Emergency mitigation", duration_minutes=120),
+        ]
+        area = ["SW", "SE", "W", "E", "N", "NW", "EC", "WC"]
     return TenantSettings(
         pack_id=pack_id,
         business_hours=hours,
@@ -71,6 +81,7 @@ def _settings(pack_id: str, slug: str) -> TenantSettings:
 DEMO_TENANTS = (
     ("demo-hvac", "Demo Heating & Cooling", "hvac"),
     ("demo-dental", "Demo Dental Practice", "dental"),
+    ("demo-restoration", "Demo Restoration Services", "restoration"),
 )
 
 

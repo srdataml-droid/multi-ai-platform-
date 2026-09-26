@@ -141,7 +141,7 @@ def run_pack(pack_id: str, real: bool) -> list[Outcome]:
     files = sorted(folder.glob("*.yaml"))
     with service_session() as s:
         seed(s)
-        tenant = s.scalar(select(Tenant).where(Tenant.pack_id == pack_id))
+        tenant = s.scalar(select(Tenant).where(Tenant.slug == f"demo-{pack_id}"))
         if tenant is None:
             raise SystemExit(f"no seeded tenant for pack {pack_id}")
         s.expunge(tenant)

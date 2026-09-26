@@ -1,0 +1,9 @@
+name: water still coming in escalates before the model
+turns:
+  - "a pipe has burst upstairs and water is still coming through the ceiling, what do I do"
+script: []
+expect:
+  proposals: [escalate_emergency]
+  status: waiting_human
+  reply_contains: ["stopcock", "electricity"]
+  max_llm_calls: 0

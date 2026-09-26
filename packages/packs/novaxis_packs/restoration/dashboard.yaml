@@ -1,0 +1,12 @@
+inbox_columns:
+  - {key: name, label: Owner}
+  - {key: damage_type, label: Damage}
+  - {key: still_active, label: Active now}
+  - {key: insurance_claim, label: Claim}
+  - {key: insurer, label: Insurer}
+  - {key: postcode, label: Postcode}
+work_queue_buckets: [active_emergencies, inspections_due, documents_owed, waiting, human_review, done]
+labels:
+  appointment: Inspection
+  provider: Technician
+  contact: Property owner

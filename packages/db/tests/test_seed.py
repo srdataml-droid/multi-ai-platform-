@@ -14,7 +14,9 @@ def test_seed_is_idempotent_and_settings_validate(migrated: str) -> None:
     with service_session(migrated) as s:
         seed(s)
         slugs = set(s.scalars(select(Tenant.slug)))
-        assert {"demo-hvac", "demo-dental"} <= slugs
-        assert s.scalar(select(func.count()).select_from(User).where(User.role == "owner")) == 2
-        for t in s.scalars(select(Tenant).where(Tenant.slug.in_(["demo-hvac", "demo-dental"]))):
+        assert {"demo-hvac", "demo-dental", "demo-restoration"} <= slugs
+        assert s.scalar(select(func.count()).select_from(User).where(User.role == "owner")) == 3
+        for t in s.scalars(
+            select(Tenant).where(Tenant.slug.in_(["demo-hvac", "demo-dental", "demo-restoration"]))
+        ):
             TenantSettings.model_validate(t.settings)

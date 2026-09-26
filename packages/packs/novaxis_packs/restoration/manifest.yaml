@@ -1,0 +1,43 @@
+id: restoration
+name: Property damage restoration (water, fire, mould, storm)
+version: "0.1"
+tools: [extract_fields, propose_appointment, hand_to_human, escalate_emergency]
+intake_opening: "I'm sorry you're dealing with this. Could I take your name, and tell me what's happened to the property?"
+emergency_keywords:
+  - "still flooding"
+  - "still pouring"
+  - "water is still coming"
+  - "water still coming"
+  - "can't turn the water off"
+  - "cannot turn the water off"
+  - "can't stop the water"
+  - "still on fire"
+  - "fire is still"
+  - "smoke now"
+  - "ceiling is collapsing"
+  - "ceiling coming down"
+  - "roof has collapsed"
+  - "sewage"
+  - "raw sewage"
+emergency_reply: >-
+  If water is still flowing, turn off the stopcock if you can reach it safely and switch off
+  electricity at the mains if water is near sockets or lights. If there is fire, smoke or a
+  risk of collapse, leave the property and call 999. I have alerted our emergency crew and
+  they will contact you straight away.
+high_risk_followup: "A member of the team will follow up with you on that directly."
+handoff_notice: >-
+  Thanks for your message. A member of the team will be in touch with you shortly to take
+  this forward.
+service_area_field: postcode
+out_of_area_reply: >-
+  Thank you for getting in touch, and I'm sorry about the damage. That postcode is outside
+  the area we cover, so I can't arrange a visit. I've let the team know in case they can
+  point you to someone local.
+after_intake:
+  action: propose_appointment
+  service_code_from: still_active
+  service_code_map:
+    "yes": emergency_mitigation
+    "no": inspection
+  default_service_code: inspection
+  window_from: preferred_window

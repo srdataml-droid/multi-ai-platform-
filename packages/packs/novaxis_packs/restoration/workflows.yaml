@@ -1,0 +1,18 @@
+steps:
+  - id: chase_24h
+    trigger: conversation_idle
+    after: 24h
+    action: send_message
+    template: "Hi {name}, checking in about the {damage_type} damage. If you'd still like an inspection, reply here and I'll pass it straight to the crew."
+    only_if_status: [waiting_customer]
+  - id: documents_48h
+    trigger: conversation_idle
+    after: 48h
+    action: send_message
+    template: "Hi {name}, if you're claiming on insurance, photos of the damage and your claim reference help the crew move faster. You can send them here any time."
+    only_if_status: [waiting_customer]
+  - id: close_14d
+    trigger: conversation_idle
+    after: 14d
+    action: close_conversation
+    only_if_status: [waiting_customer]

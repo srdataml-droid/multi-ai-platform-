@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_core.media import media_view
 from novaxis_core.models import Contact, Conversation, Message, Tenant
 from novaxis_core.sensitive import reveal
 from novaxis_packs import get_pack
@@ -50,6 +51,7 @@ def get_conversation(
                 "direction": m.direction,
                 "author": m.author,
                 "body": m.body,
+                "media": media_view(m.media) if m.media else [],
                 "at": m.created_at.isoformat(),
             }
             for m in messages

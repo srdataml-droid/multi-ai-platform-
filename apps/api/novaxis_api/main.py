@@ -13,6 +13,7 @@ from novaxis_api.routes_approvals import router as approvals_router
 from novaxis_api.routes_conversations import router as conversations_router
 from novaxis_api.routes_inbound import router as inbound_router
 from novaxis_api.routes_me import router as me_router
+from novaxis_api.routes_media import router as media_router
 from novaxis_core.settings import get_settings
 from novaxis_core.version import build_info
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(inbound_router)
     app.include_router(approvals_router)
     app.include_router(conversations_router)
+    app.include_router(media_router)
     return app
 
 

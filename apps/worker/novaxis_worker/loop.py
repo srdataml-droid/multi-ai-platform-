@@ -20,6 +20,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from novaxis_core.llm import LLMClient
+from novaxis_core.media import fetch_media
 from novaxis_core.models import AuditLog, Conversation, Job, Tenant
 from novaxis_core.notify import notify_staff
 from novaxis_core.outbound import send_message
@@ -106,8 +107,13 @@ def _handle_workflow_step(pack_for: Callable[[str], PackSpec]) -> Handler:
     return handler
 
 
+def _handle_fetch_media(session: Session, tenant: Tenant, job: Job) -> None:
+    fetch_media(session, tenant, uuid.UUID(job.payload["message_id"]))
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
+        "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
         "notify_staff": _handle_notify_staff,

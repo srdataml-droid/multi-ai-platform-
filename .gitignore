@@ -12,3 +12,4 @@ dist/
 .ruff_cache/
 .pytest_cache/
 apps/web/next-env.d.ts
+.novaxis-media/

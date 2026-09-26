@@ -1,0 +1,15 @@
+name: mould with no claim skips the insurer question and still proposes
+turns:
+  - "black mould spreading on the bedroom wall"
+  - "Sam Reed, noticed it a month ago, it's a house, no I'm not claiming. 4 Sample Street, SW2 1AA, 07700 900888, any afternoon this week."
+script:
+  - text: "I'm sorry to hear that. Could I take your name, and is it still spreading now?"
+    calls:
+      - {tool: extract_fields, input: {fields: {damage_type: mould, still_active: "no"}}}
+  - text: "Thanks Sam. I've passed this to the crew to confirm an afternoon this week. Photos of the wall would help if you can send them."
+    calls:
+      - {tool: extract_fields, input: {fields: {name: "Sam Reed", when_happened: "a month ago", property_type: house, insurance_claim: "no", address: "4 Sample Street", postcode: "SW2 1AA", phone: "07700 900888", preferred_window: "afternoon this week"}}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {damage_type: mould, insurance_claim: "no"}
+  reply_never_contains: ["booked"]

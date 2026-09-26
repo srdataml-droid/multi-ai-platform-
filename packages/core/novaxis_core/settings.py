@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # Fernet key (urlsafe base64, 32 bytes) for sensitive intake fields at rest. Empty means
     # "derive from the JWT secret", which is acceptable only when env == "local".
     sensitive_fields_key: str = ""
+    # Media storage. "local" writes under storage_local_dir; "supabase" uses Storage REST.
+    storage_backend: str = "local"
+    storage_local_dir: str = ".novaxis-media"
+    storage_bucket: str = "media"
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    media_max_bytes: int = 10 * 1024 * 1024
+    media_allowed_types: tuple[str, ...] = ("image/", "application/pdf", "video/mp4")
     # Local: Mailpit; production: unused when Postmark is configured.
     smtp_host: str = "localhost"
     smtp_port: int = 1025

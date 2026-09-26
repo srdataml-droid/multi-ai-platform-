@@ -1,0 +1,16 @@
+name: water damage with an insurance claim ends in an inspection proposal
+turns:
+  - "Hi, we had a leak from the flat above last week, the plumber has fixed it but our ceiling and carpets are soaked"
+  - "Jo Lin. It's not happening any more. It's a flat. We're claiming, insurer is Aviva, ref AV123. 12 Example Road, SE1 7PB, 07700 900777, tomorrow morning."
+script:
+  - text: "I'm sorry you're dealing with this. Could I take your name, and is water still coming in now?"
+    calls:
+      - {tool: extract_fields, input: {fields: {damage_type: water, when_happened: "last week"}}}
+  - text: "Thanks Jo. I've passed this to the crew to confirm a time tomorrow morning. If you can, send a few photos of the ceiling and carpets here."
+    calls:
+      - {tool: extract_fields, input: {fields: {name: "Jo Lin", still_active: "no", property_type: flat, insurance_claim: "yes", insurer: "Aviva AV123", address: "12 Example Road", postcode: "SE1 7PB", phone: "07700 900777", preferred_window: "tomorrow morning"}}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {damage_type: water, insurance_claim: "yes", still_active: "no"}
+  reply_contains: ["passed this to the crew", "photos"]
+  reply_never_contains: ["booked"]

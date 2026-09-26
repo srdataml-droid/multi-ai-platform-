@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.channels import NormalisedInbound, get_adapter
+from novaxis_core.media import attach_media
 from novaxis_core.models import AuditLog, Contact, Conversation, Job, Message, Tenant
 
 OPT_OUT_WORDS = frozenset({"stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout"})
@@ -121,11 +122,12 @@ def _store_inbound(
         author="customer",
         body=inbound.body,
         provider_ref=inbound.provider_ref,
-        media=[m.model_dump() for m in inbound.media],
         delivered_at=inbound.received_at,
     )
     session.add(msg)
     session.flush()
+    if inbound.media:
+        attach_media(session, tenant, msg, inbound.media)
     return msg
 
 

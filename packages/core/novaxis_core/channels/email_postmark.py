@@ -52,7 +52,12 @@ class PostmarkEmailAdapter:
         if not body:
             raise ParseError("empty email")
         media = [
-            Media(url=f"postmark-attachment:{a.get('Name')}", content_type=a.get("ContentType"))
+            Media(
+                url=f"postmark-attachment:{a.get('Name')}",
+                content_type=a.get("ContentType"),
+                filename=a.get("Name"),
+                inline_base64=a.get("Content"),
+            )
             for a in p.get("Attachments") or []
             if a.get("Name")
         ]

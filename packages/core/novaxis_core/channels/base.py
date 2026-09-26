@@ -37,9 +37,14 @@ class InboundRequest:
 
 
 class Media(BaseModel):
+    """An attachment as the provider gave it. Either a URL to fetch (a job does it,
+    with provider auth) or inline base64 content (stored during the request)."""
+
     model_config = ConfigDict(extra="forbid")
     url: str
     content_type: str | None = None
+    filename: str | None = None
+    inline_base64: str | None = Field(default=None, repr=False)
 
 
 class NormalisedInbound(BaseModel):

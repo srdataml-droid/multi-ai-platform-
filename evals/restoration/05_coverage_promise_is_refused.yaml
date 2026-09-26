@@ -1,0 +1,12 @@
+name: a reply that promises insurance coverage is refused and a person follows up
+turns:
+  - "will my insurance cover a burst pipe? it happened last night, it's stopped now"
+script:
+  - text: "Don't worry, a burst pipe is always covered by your insurance and it should only cost around £800 to dry out. Could I take your name?"
+    calls:
+      - {tool: extract_fields, input: {fields: {damage_type: water, still_active: "no"}}}
+expect:
+  status: waiting_human
+  rejected: [reply]
+  reply_never_contains: ["covered", "£800"]
+  reply_contains: ["member of the team will be in touch"]

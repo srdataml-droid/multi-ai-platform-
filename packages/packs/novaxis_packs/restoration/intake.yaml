@@ -1,0 +1,36 @@
+questions:
+  - key: name
+    ask: "What's your name?"
+  - key: damage_type
+    ask: "What kind of damage is it: water, fire, mould, storm, sewage, or something else?"
+    type: choice
+    choices: ["water", "fire", "mould", "storm", "sewage", "other"]
+  - key: still_active
+    ask: "Is it still happening right now, for example water still coming in or smoke still present?"
+    type: yesno
+  - key: when_happened
+    ask: "When did it happen or when did you first notice it?"
+  - key: property_type
+    ask: "Is the property a house, a flat, or a commercial premises?"
+    type: choice
+    choices: ["house", "flat", "commercial", "other"]
+  - key: insurance_claim
+    ask: "Are you making an insurance claim for this?"
+    type: choice
+    choices: ["yes", "no", "not sure"]
+  - key: insurer
+    ask: "Who is the insurer, and do you have a claim reference yet?"
+    skip_if: {insurance_claim: "no"}
+    required: false
+  - key: address
+    ask: "What's the address of the property?"
+    sensitive: true
+  - key: postcode
+    ask: "And the postcode?"
+    type: postcode
+  - key: phone
+    ask: "Best phone number for the crew to reach you on?"
+    type: phone
+  - key: preferred_window
+    ask: "When could someone come to inspect? Today, tomorrow, morning or afternoon is enough."
+    type: window

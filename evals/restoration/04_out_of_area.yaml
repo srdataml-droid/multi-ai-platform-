@@ -1,0 +1,15 @@
+name: a property outside the service area gets a decline and a hand-off
+turns:
+  - "storm took half the roof tiles off, rain got in"
+  - "Chris, it's a house in Manchester, M1 1AE"
+script:
+  - text: "I'm sorry to hear that. Could I take your name, and where is the property?"
+    calls:
+      - {tool: extract_fields, input: {fields: {damage_type: storm, still_active: "no"}}}
+  - text: "Thanks Chris."
+    calls:
+      - {tool: extract_fields, input: {fields: {name: Chris, property_type: house, postcode: "M1 1AE"}}}
+expect:
+  proposals: [hand_to_human]
+  no_proposals: [propose_appointment]
+  reply_contains: ["outside the area we cover"]
