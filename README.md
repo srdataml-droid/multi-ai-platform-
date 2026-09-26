@@ -6,7 +6,7 @@ dashboard, per-industry packs. See `CLAUDE.md` for the rules and `docs/ARCHITECT
 
 ## Status
 
-Planning complete, build not started. Chunk 0 of `docs/BUILD-PLAN.md` is next.
+Chunk 0 done: skeleton, tooling, CI, `/health` and `/version`, one web page. Chunk 1 (tenancy and data model) is next.
 
 ## Where things are
 

@@ -1,0 +1,13 @@
+[project]
+name = "novaxis-packs"
+version = "0.0.0"
+description = "Vertical packs: hvac, dental, restoration. Data plus one rules hook each."
+requires-python = ">=3.12"
+dependencies = ["novaxis-core", "pyyaml>=6.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["novaxis_packs"]

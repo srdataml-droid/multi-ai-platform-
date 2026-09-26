@@ -1,0 +1,13 @@
+[project]
+name = "novaxis-api"
+version = "0.0.0"
+description = "HTTP API: webhooks in, normalised events out"
+requires-python = ">=3.12"
+dependencies = ["novaxis-core", "novaxis-db", "fastapi>=0.115", "uvicorn[standard]>=0.30"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["novaxis_api"]

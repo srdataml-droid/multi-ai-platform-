@@ -8,3 +8,7 @@ node_modules/
 .next/
 dist/
 .DS_Store
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+apps/web/next-env.d.ts
