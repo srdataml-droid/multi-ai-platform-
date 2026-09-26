@@ -6,7 +6,7 @@ dashboard, per-industry packs. See `CLAUDE.md` for the rules and `docs/ARCHITECT
 
 ## Status
 
-Chunks 0 to 5 done: skeleton and CI; core tables with row-level security; JWT auth; three channel adapters; the worker loop and LLM turn; the approval gate and executors; packs as validated folders with an intake engine, service-area check, idle-customer workflows and golden evals; the HVAC pack passes 5 of 5 evals with the scripted model. Chunk 6 (the dental pack and sensitive-field handling) is next.
+Chunks 0 to 5 done: skeleton and CI; core tables with row-level security; JWT auth; three channel adapters; the worker loop and LLM turn; the approval gate and executors; packs as validated folders with an intake engine, service-area check, idle-customer workflows and golden evals; the HVAC and dental packs each pass 5 of 5 evals with the scripted model; sensitive intake fields are encrypted at rest, kept out of logs, and revealed only to staff roles. Chunk 7 (the restoration pack and photo intake) is next.
 
 ## Where things are
 

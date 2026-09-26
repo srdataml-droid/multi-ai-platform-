@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     postmark_inbound_token: str = ""
     # Signs web-chat visitor tokens. Defaults to the JWT secret; set separately in production.
     visitor_token_secret: str = ""
+    # Fernet key (urlsafe base64, 32 bytes) for sensitive intake fields at rest. Empty means
+    # "derive from the JWT secret", which is acceptable only when env == "local".
+    sensitive_fields_key: str = ""
     # Local: Mailpit; production: unused when Postmark is configured.
     smtp_host: str = "localhost"
     smtp_port: int = 1025

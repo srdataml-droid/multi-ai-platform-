@@ -40,14 +40,10 @@ seed:          ## seed demo tenants (idempotent)
 dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
 	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
-demo:          ## Chunk 5 demo: HVAC evals pass with the scripted model; then one real intake turn
-	uv run python evals/run.py --pack hvac
-	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running, skipping live turn"; exit 0)
-	@R=$$(curl -s -X POST http://localhost:8000/inbound/webchat/demo-hvac -H 'Content-Type: application/json' \
-	  -d '{"body":"Hi, no heating since this morning"}'); \
-	T=$$(echo "$$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["visitor_token"])'); \
-	uv run python -m novaxis_worker.main --once; \
-	curl -s "http://localhost:8000/inbound/webchat/demo-hvac/messages?visitor_token=$$T" | python3 -m json.tool
+demo:          ## Chunk 6 demo: dental evals; a symptom is encrypted at rest and redacted for a viewer
+	uv run python evals/run.py --pack dental
+	@echo "--- raw row: symptom is stored as enc:v1:... ---"
+	@psql "$$(echo "$${NOVAXIS_DATABASE_URL:-postgresql://novaxis:novaxis@localhost:5432/novaxis}" | sed 's/+psycopg//')" -tAc "select extracted->>'symptom' from conversations where extracted ? 'symptom' order by created_at desc limit 1" | cut -c1-40
 
 worker-once:   ## drain the job queue once and exit
 	uv run python -m novaxis_worker.main --once

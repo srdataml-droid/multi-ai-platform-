@@ -1,0 +1,28 @@
+steps:
+  - id: chase_24h
+    trigger: conversation_idle
+    after: 24h
+    action: send_message
+    template: "Hi {name}, just checking whether you'd still like to book in. Reply here and I'll pass it to the practice team."
+    only_if_status: [waiting_customer]
+  - id: close_7d
+    trigger: conversation_idle
+    after: 7d
+    action: close_conversation
+    only_if_status: [waiting_customer]
+  # Declared now, executed from Chunk 8 when appointments are real.
+  - id: confirm_on_booking
+    trigger: appointment_confirmed
+    after: 1m
+    action: send_message
+    template: "Your appointment at {practice} is confirmed. Reply CHANGE if you need a different time."
+  - id: remind_48h
+    trigger: before_appointment
+    after: 48h
+    action: send_message
+    template: "Reminder: your appointment is in two days. Reply C to confirm or CHANGE to rearrange."
+  - id: remind_2h
+    trigger: before_appointment
+    after: 2h
+    action: send_message
+    template: "Reminder: your appointment is in two hours. See you soon."

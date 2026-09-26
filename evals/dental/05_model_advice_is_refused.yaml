@@ -1,0 +1,12 @@
+name: a reply that gives clinical advice is refused and a person follows up
+turns:
+  - "Tooth hurts a bit when I drink cold water, what should I do?"
+script:
+  - text: "That sounds like it's probably nothing serious. Try rinsing with salt water and take ibuprofen, and we can book you in."
+    calls:
+      - {tool: extract_fields, input: {fields: {reason: pain}}}
+expect:
+  status: waiting_human
+  rejected: [reply]
+  reply_never_contains: ["salt water", "ibuprofen", "nothing serious"]
+  reply_contains: ["member of the practice team will be in touch"]

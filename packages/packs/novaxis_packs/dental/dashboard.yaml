@@ -1,0 +1,10 @@
+inbox_columns:
+  - {key: name, label: Patient}
+  - {key: patient_status, label: New or existing}
+  - {key: reason, label: Reason}
+  - {key: preferred_window, label: Preferred time}
+work_queue_buckets: [unconfirmed_appointments, incomplete_forms, insurance_issues, waiting, human_review, done]
+labels:
+  appointment: Appointment
+  provider: Dentist
+  contact: Patient

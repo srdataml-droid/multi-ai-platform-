@@ -80,6 +80,7 @@ def _core_rules(
     """Return (forced_risk, reason) or (None, None). Forced risk can only raise."""
     sends = kind in {
         "reply",
+        "handoff_notice",
         "ask_intake_question",
         "send_reminder",
         "outbound_first_contact",
@@ -92,7 +93,7 @@ def _core_rules(
     if kind == "collect_payment":
         return "high", "payments are never automatic"
     text = " ".join(str(v) for v in params.values() if isinstance(v, str))
-    if kind not in {"hand_to_human", "escalate_emergency"} and (
+    if kind not in {"hand_to_human", "escalate_emergency", "handoff_notice"} and (
         SAFEGUARDING.search(ctx.latest_inbound_text) or SAFEGUARDING.search(text)
     ):
         return "high", "safeguarding: a person must review this conversation"

@@ -95,6 +95,9 @@ class Manifest(BaseModel):
     emergency_keywords: list[str] = Field(default_factory=list)
     emergency_reply: str = ""
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
+    handoff_notice: str = (
+        "Thanks for your message. A member of the team will be in touch with you shortly."
+    )
     service_area_field: str | None = None
     out_of_area_reply: str = ""
     after_intake: AfterIntake = Field(default_factory=AfterIntake)
@@ -187,6 +190,7 @@ class PackSpec:
     emergency_check: EmergencyCheck | None = None
     rule: PackRule | None = None
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
+    handoff_notice: str = "Thanks for your message. A member of the team will be in touch shortly."
     service_area_field: str | None = None
     out_of_area_reply: str = ""
     after_intake: AfterIntake = field(default_factory=AfterIntake)

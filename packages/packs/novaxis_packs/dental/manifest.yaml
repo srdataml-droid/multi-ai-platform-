@@ -1,0 +1,35 @@
+id: dental
+name: Dental practice (UK)
+version: "0.1"
+tools: [extract_fields, propose_appointment, hand_to_human, escalate_emergency]
+intake_opening: "Hello, thanks for getting in touch with the practice. Could I take your name, and are you an existing patient with us or new to the practice?"
+emergency_keywords:
+  - "can't breathe"
+  - "cannot breathe"
+  - "difficulty breathing"
+  - "can't swallow"
+  - "cannot swallow"
+  - "uncontrolled bleeding"
+  - "won't stop bleeding"
+  - "will not stop bleeding"
+  - "knocked out"
+  - "swallowed"
+emergency_reply: >-
+  If you have swelling that is affecting your breathing or swallowing, bleeding that will not
+  stop, or a serious injury, please go to your nearest emergency department or call 999 now.
+  I have alerted the practice and someone will contact you as soon as possible.
+high_risk_followup: "A member of the practice team will follow up with you on that directly."
+handoff_notice: >-
+  Thanks for your message. A member of the practice team will be in touch with you shortly to
+  help with this.
+after_intake:
+  action: propose_appointment
+  service_code_from: reason
+  service_code_map:
+    "check-up": checkup
+    "hygienist": hygiene
+    "pain": emergency
+    "broken tooth": emergency
+    "other": checkup
+  default_service_code: checkup
+  window_from: preferred_window

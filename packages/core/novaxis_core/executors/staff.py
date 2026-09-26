@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from novaxis_core.channels import get_adapter
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
 from novaxis_core.models import ActionProposal, Conversation, Tenant
+from novaxis_core.pack_registry import resolve_pack
+from novaxis_core.sensitive import encrypt_fields
 
 
 @executor("extract_fields")
@@ -18,9 +20,11 @@ def extract_fields(
     conv = session.get(Conversation, conversation_id_of(proposal))
     if conv is None:
         return ExecResult(False, {}, "conversation not found")
+    sensitive = resolve_pack(tenant.pack_id).sensitive_keys
     merged = dict(conv.extracted)
-    merged.update({str(k): str(v) for k, v in params.fields.items()})
+    merged.update(encrypt_fields({str(k): str(v) for k, v in params.fields.items()}, sensitive))
     conv.extracted = merged
+    # Keys only: values may be sensitive and this result is audited.
     return ExecResult(True, {"keys": ",".join(sorted(params.fields))})
 
 

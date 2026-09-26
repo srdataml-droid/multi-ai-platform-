@@ -1,0 +1,38 @@
+questions:
+  - key: name
+    ask: "What's your name?"
+  - key: patient_status
+    ask: "Are you an existing patient with us, or new to the practice?"
+    type: choice
+    choices: ["existing", "new"]
+  - key: reason
+    ask: "What would you like to come in for: a check-up, the hygienist, pain, a broken tooth, or something else?"
+    type: choice
+    choices: ["check-up", "hygienist", "pain", "broken tooth", "other"]
+  - key: symptom
+    ask: "Could you describe what's happening?"
+    sensitive: true
+    skip_if: {reason: "check-up"}
+  - key: pain_level
+    ask: "On a scale of 0 to 10, how bad is the pain right now?"
+    pattern: "^([0-9]|10)$"
+    sensitive: true
+    skip_if: {reason: "check-up"}
+  - key: duration
+    ask: "How long has it been going on?"
+    sensitive: true
+    skip_if: {reason: "check-up"}
+  - key: funding
+    ask: "Would this be as an NHS patient or privately?"
+    type: choice
+    choices: ["NHS", "private", "not sure"]
+    sensitive: true
+  - key: preferred_provider
+    ask: "Is there a particular dentist or hygienist you'd like to see?"
+    required: false
+  - key: phone
+    ask: "What's the best phone number to reach you on?"
+    type: phone
+  - key: preferred_window
+    ask: "When would suit you? A day and morning or afternoon is enough."
+    type: window

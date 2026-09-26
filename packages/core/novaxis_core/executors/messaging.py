@@ -34,6 +34,13 @@ def reply(session: Session, tenant: Tenant, proposal: ActionProposal, params: An
     return _send_text(session, tenant, proposal, params.text)
 
 
+@executor("handoff_notice")
+def handoff_notice(
+    session: Session, tenant: Tenant, proposal: ActionProposal, params: Any
+) -> ExecResult:
+    return _send_text(session, tenant, proposal, params.text)
+
+
 @executor("ask_intake_question")
 def ask_intake_question(
     session: Session, tenant: Tenant, proposal: ActionProposal, params: Any

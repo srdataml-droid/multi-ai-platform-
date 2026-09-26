@@ -32,6 +32,12 @@ class ReplyParams(_Params):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class HandoffNoticeParams(_Params):
+    """Fixed, pack-authored text sent when the model's reply was refused. Never model text."""
+
+    text: str = Field(min_length=1, max_length=1000)
+
+
 class AskIntakeQuestionParams(_Params):
     question_key: str
     text: str = Field(min_length=1, max_length=2000)
@@ -120,6 +126,13 @@ ACTIONS: dict[str, ActionKind] = {
             default_risk="low",
             floor="low",
             description="Send the reply text to the customer",
+        ),
+        ActionKind(
+            name="handoff_notice",
+            params=HandoffNoticeParams,
+            default_risk="low",
+            floor="low",
+            description="Tell the customer a person will follow up, with fixed pack text",
         ),
         ActionKind(
             name="ask_intake_question",

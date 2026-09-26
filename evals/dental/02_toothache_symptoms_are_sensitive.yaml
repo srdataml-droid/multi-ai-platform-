@@ -1,0 +1,15 @@
+name: toothache intake records symptoms and proposes an urgent slot
+turns:
+  - "I've got really bad toothache, lower left, can I be seen soon"
+  - "Ben Shaw, new patient. It's throbbing, about 7 out of 10, started three days ago. Private is fine. 07700 900654, tomorrow if possible."
+script:
+  - text: "I'm sorry to hear that. Could I take your name, and are you new to the practice or an existing patient?"
+    calls:
+      - {tool: extract_fields, input: {fields: {reason: pain}}}
+  - text: "Thank you Ben. I've passed this to the team to find you the earliest time tomorrow."
+    calls:
+      - {tool: extract_fields, input: {fields: {name: "Ben Shaw", patient_status: new, symptom: "throbbing lower left", pain_level: "7", duration: "three days", funding: private, phone: "07700 900654", preferred_window: tomorrow}}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {reason: pain, symptom: "throbbing lower left", pain_level: "7"}
+  reply_never_contains: ["booked", "ibuprofen", "paracetamol"]

@@ -1,0 +1,16 @@
+name: existing patient books a check-up
+turns:
+  - "Hi, I'd like to book a check-up please"
+  - "It's Amara Okafor, I'm an existing patient, NHS. 07700 900321, any Tuesday morning."
+script:
+  - text: "Of course. Could I take your name, and are you an existing patient with us or new to the practice?"
+    calls:
+      - {tool: extract_fields, input: {fields: {reason: "check-up"}}}
+  - text: "Thanks Amara, I've passed this to the team to confirm a Tuesday morning."
+    calls:
+      - {tool: extract_fields, input: {fields: {name: "Amara Okafor", patient_status: existing, funding: NHS, phone: "07700 900321", preferred_window: "Tuesday morning"}}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {reason: "check-up", patient_status: existing, funding: nhs}
+  reply_contains: ["passed this to the team"]
+  reply_never_contains: ["booked"]

@@ -28,6 +28,27 @@ CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = 
     # ---- defaults per kind ----
     ("reply default", "reply", {"text": "hi"}, {}, ("low", "auto_approved")),
     (
+        "handoff notice default",
+        "handoff_notice",
+        {"text": "A person will be in touch."},
+        {},
+        ("low", "auto_approved"),
+    ),
+    (
+        "handoff notice survives safeguarding",
+        "handoff_notice",
+        {"text": "A person will be in touch."},
+        {"inbound": "my son is 7 years old"},
+        ("low", "auto_approved"),
+    ),
+    (
+        "handoff notice respects opt-out",
+        "handoff_notice",
+        {"text": "A person will be in touch."},
+        {"consent": {"status": "opted_out"}},
+        ("high", "rejected"),
+    ),
+    (
         "intake question default",
         "ask_intake_question",
         {"question_key": "name", "text": "Name?"},

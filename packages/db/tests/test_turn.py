@@ -242,15 +242,17 @@ def test_safeguarding_message_stops_the_reply_and_hands_to_human(hvac: Tenant) -
     fake = FakeLLM(script=[("I can help with that.", [])])
     with tenant_session(hvac.id) as s:
         r = run_turn(s, hvac, get_pack("hvac"), fake, conv_id)
-    assert r.reply_message_id is None and r.decisions["reply"] == "rejected"
+    assert r.decisions["reply"] == "rejected"
+    assert r.decisions["handoff_notice"] == "auto_approved"
     with tenant_session(hvac.id) as s:
         conv = s.get(Conversation, conv_id)
         assert conv is not None and conv.status == "waiting_human"
-        assert (
-            s.scalar(
+        out = list(
+            s.scalars(
                 select(Message).where(
                     Message.conversation_id == conv_id, Message.direction == "outbound"
                 )
             )
-            is None
         )
+        assert len(out) == 1 and "I can help with that" not in out[0].body
+        assert "member of the team will be in touch" in out[0].body

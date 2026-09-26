@@ -123,6 +123,7 @@ def test_every_executor_writes_an_audit_row(hvac: Tenant, fakes) -> None:  # typ
     conv_id = _conversation(hvac)
     cases = [
         ("reply", {"text": "Hello there"}),
+        ("handoff_notice", {"text": "A person will be in touch."}),
         ("ask_intake_question", {"question_key": "name", "text": "Your name?"}),
         ("extract_fields", {"fields": {"name": "Al"}}),
         ("send_reminder", {"appointment_id": "a1", "text": "See you tomorrow"}),

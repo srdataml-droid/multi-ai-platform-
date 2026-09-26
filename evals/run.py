@@ -27,6 +27,7 @@ from novaxis_core.channels import NormalisedInbound
 from novaxis_core.inbound import ingest
 from novaxis_core.llm import FakeLLM, LLMClient, ToolCall, build_llm
 from novaxis_core.models import ActionProposal, Conversation, Message, Tenant
+from novaxis_core.sensitive import reveal
 from novaxis_db.seed import seed
 from novaxis_db.session import service_session, tenant_session
 from novaxis_packs import get_pack
@@ -114,8 +115,9 @@ def run_one(path: Path, tenant: Tenant, llm: LLMClient | None) -> Outcome:
         for k in expect.get("rejected") or []:
             if k not in rejected:
                 failures.append(f"expected {k} to be rejected")
+        revealed = reveal(conv.extracted, pack.sensitive_keys, "staff")
         for key, value in (expect.get("extracted") or {}).items():
-            got = str(conv.extracted.get(key, "")).lower()
+            got = str(revealed.get(key, "")).lower()
             if value is True:
                 if not got:
                     failures.append(f"expected extracted.{key} to be set")

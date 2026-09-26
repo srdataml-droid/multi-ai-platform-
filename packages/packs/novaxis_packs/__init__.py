@@ -7,6 +7,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from novaxis_core.pack_registry import set_pack_resolver
 from novaxis_core.packs import load_pack
 from novaxis_core.packspec import PackSpec
 
@@ -24,3 +25,6 @@ def get_pack(pack_id: str) -> PackSpec:
     if not (folder / "manifest.yaml").exists():
         folder = PACKS_DIR / "generic"
     return load_pack(folder)
+
+
+set_pack_resolver(get_pack)

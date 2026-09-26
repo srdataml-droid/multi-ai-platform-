@@ -38,6 +38,7 @@ from novaxis_core.models import (
 )
 from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
+from novaxis_core.sensitive import decrypt_fields
 from novaxis_core.settings import get_settings
 from novaxis_core.workflows import schedule_idle_steps
 
@@ -265,7 +266,8 @@ def run_turn(
         if conv.summary:
             system_volatile += f"\n\nSummary of the conversation so far:\n{conv.summary}"
         if pack.intake:
-            system_volatile += "\n\n" + prompt_block(pack.intake, conv.extracted)
+            plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+            system_volatile += "\n\n" + prompt_block(pack.intake, plain)
         if first_worker_reply:
             system_volatile += f"\n\nThis is your first reply. Open with: {pack.intake_opening}"
         result = llm.complete(
@@ -287,10 +289,9 @@ def run_turn(
             if d.state == "rejected":
                 followup_needed = True
         session.refresh(conv)
-        st = intake_status(pack.intake, conv.extracted) if pack.intake else None
-        area_value = (
-            conv.extracted.get(pack.service_area_field) if pack.service_area_field else None
-        )
+        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        st = intake_status(pack.intake, plain) if pack.intake else None
+        area_value = plain.get(pack.service_area_field) if pack.service_area_field else None
         if area_value and out_of_area(str(area_value), tenant.settings.get("service_area") or []):
             reply_text = pack.out_of_area_reply or reply_text
             if not _has_proposal(session, conv, "hand_to_human"):
@@ -314,8 +315,8 @@ def run_turn(
         ):
             # The model finished intake but did not propose; the engine does it for it.
             params = {
-                "service_code": _service_code(pack, conv.extracted),
-                "preferred_window": str(conv.extracted.get(pack.after_intake.window_from, "")),
+                "service_code": _service_code(pack, plain),
+                "preferred_window": str(plain.get(pack.after_intake.window_from, "")),
                 "notes": "proposed by intake engine",
             }
             p, d = propose(
@@ -360,7 +361,24 @@ def run_turn(
     if reply_p.state == "executed":
         reply_message_id = uuid.UUID(str(reply_p.result.get("message_id")))
     elif reply_d.state == "rejected":
+        # The model's words were refused. Say something fixed and safe, then hand over.
         conv.status = "waiting_human"
+        notice_p, notice_d = propose(
+            session,
+            tenant,
+            conv,
+            "handoff_notice",
+            {"text": pack.handoff_notice},
+            ctx,
+            f"reply refused: {reply_d.reason}",
+        )
+        result_ids.append(notice_p.id)
+        decisions["handoff_notice"] = notice_d.state
+        if notice_p.state == "executed":
+            reply_message_id = uuid.UUID(str(notice_p.result.get("message_id")))
+        _audit(
+            session, tenant.id, "turn.reply_refused", conversation_id=conv.id, reason=reply_d.reason
+        )
 
     conv.updated_at = datetime.now(UTC)
     if conv.status == "open":

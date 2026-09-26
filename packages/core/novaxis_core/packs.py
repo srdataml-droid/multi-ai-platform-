@@ -146,6 +146,7 @@ def load_pack(folder: Path) -> PackSpec:
         emergency_check=emergency_check,
         rule=rule,
         high_risk_followup=manifest.high_risk_followup,
+        handoff_notice=manifest.handoff_notice,
         service_area_field=manifest.service_area_field,
         out_of_area_reply=manifest.out_of_area_reply,
         after_intake=ai,
