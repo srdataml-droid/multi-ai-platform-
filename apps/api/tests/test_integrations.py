@@ -25,6 +25,13 @@ def client(migrated: str, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     yield TestClient(create_app(), follow_redirects=False)
     get_settings.cache_clear()
     set_callback_transport(None)
+    # Never leave a connected fake calendar behind for other tests, even if this one failed.
+    with service_session(migrated) as s:
+        for integ in s.scalars(
+            select(Integration).where(Integration.provider == "google_calendar")
+        ):
+            integ.health = "disconnected"
+            integ.encrypted_credentials = None
 
 
 def _owner(slug: str = "demo-hvac") -> dict[str, str]:
@@ -60,7 +67,8 @@ def test_connect_returns_google_url_and_callback_stores_sealed_tokens(client: Te
     with tenant_session(tid) as s:
         integ = s.scalar(select(Integration).where(Integration.provider == "google_calendar"))
         assert integ is not None and integ.health == "connected"
-        assert integ.encrypted_credentials is not None and b"rt" not in integ.encrypted_credentials
+        assert integ.encrypted_credentials is not None
+        assert b'"refresh_token"' not in integ.encrypted_credentials, "sealed, not plaintext JSON"
         assert unseal(integ.encrypted_credentials)["refresh_token"] == "rt"
     listing = client.get("/integrations", headers=_owner()).json()
     assert listing["system_of_record"] == "google_calendar"

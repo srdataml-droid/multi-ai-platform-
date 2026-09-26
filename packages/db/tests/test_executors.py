@@ -14,6 +14,8 @@ from novaxis_core.channels.twilio_sms import TwilioSmsAdapter
 from novaxis_core.executors import GateBypassError, execute
 from novaxis_core.inbound import ingest
 from novaxis_core.models import ActionProposal, AuditLog, Conversation, Message, Tenant
+from novaxis_core.sor import set_sor_override
+from novaxis_core.sor.fake import FakeCalendar
 from novaxis_db.seed import seed
 from novaxis_db.session import service_session, tenant_session
 
@@ -32,6 +34,14 @@ class Fake:
     def send(self, *, to: str, body: str, tenant_channel_config: dict[str, Any]) -> ProviderRef:
         self.sent.append((to, body))
         return ProviderRef(provider_ref=f"fake-{uuid.uuid4().hex[:6]}")
+
+
+@pytest.fixture(autouse=True)
+def _fake_calendar():
+    """Executors that touch the diary must never reach a real calendar from a test."""
+    set_sor_override(lambda tenant: FakeCalendar())
+    yield
+    set_sor_override(None)
 
 
 @pytest.fixture
