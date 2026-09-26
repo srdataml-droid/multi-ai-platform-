@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     worker_enabled: bool = True
     worker_poll_seconds: float = 1.0
     log_level: str = "INFO"
+    # HS256 secret that signs dashboard JWTs. Supabase projects expose theirs in
+    # project settings. The default is only acceptable when env == "local".
+    jwt_secret: str = "dev-secret-change-me-before-any-deploy-0123456789"
+    jwt_audience: str = "authenticated"
+    # The Postgres role the app switches to inside tenant_session. RLS applies to it.
+    app_role: str = "novaxis_app"
 
 
 @lru_cache(maxsize=1)

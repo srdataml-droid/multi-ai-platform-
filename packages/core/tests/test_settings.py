@@ -2,7 +2,8 @@ from novaxis_core.settings import Settings
 from novaxis_core.version import build_info
 
 
-def test_settings_defaults_are_local() -> None:
+def test_settings_defaults_are_local(monkeypatch) -> None:
+    monkeypatch.delenv("NOVAXIS_ENV", raising=False)
     s = Settings(_env_file=None)
     assert s.env == "local"
     assert s.worker_enabled is True

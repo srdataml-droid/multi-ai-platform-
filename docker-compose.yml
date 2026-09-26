@@ -6,6 +6,8 @@ services:
       POSTGRES_PASSWORD: novaxis
       POSTGRES_DB: novaxis
     ports: ["5432:5432"]
+    # Also creates the test database on first start.
+    command: ["postgres", "-c", "log_statement=none"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U novaxis"]
@@ -58,10 +60,12 @@ services:
   test:
     build: .
     profiles: [test]
-    command: ["sh", "-c", "uv sync --all-packages --frozen && uv run pytest -q"]
+    command: ["sh", "-c", "uv sync --all-packages --frozen && psql \"$$PG\" -tc \"select 1 from pg_database where datname='novaxis_test'\" | grep -q 1 || psql \"$$PG\" -c 'create database novaxis_test'; uv run pytest -q"]
     environment:
       NOVAXIS_ENV: test
+      PG: postgresql://novaxis:novaxis@postgres:5432/novaxis
       NOVAXIS_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@postgres:5432/novaxis
+      NOVAXIS_TEST_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@postgres:5432/novaxis_test
     depends_on:
       postgres: { condition: service_healthy }
 

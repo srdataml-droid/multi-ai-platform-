@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals migrate seed demo web-install
+.PHONY: up down test test-docker lint typecheck evals migrate migrate-new seed dev-token demo web-install
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -25,11 +25,17 @@ typecheck:     ## mypy strict on core + tsc on web
 evals:         ## Golden-conversation evals (Chunk 5 onward)
 	@echo "no evals yet; arrives with the first pack (Chunk 5)"
 
-migrate:       ## alembic upgrade head (Chunk 1)
-	@echo "no migrations yet (Chunk 1)"
+migrate:       ## alembic upgrade head
+	uv run alembic -c packages/db/alembic.ini upgrade head
 
-seed:          ## seed demo tenants (Chunk 1)
-	@echo "no seed yet (Chunk 1)"
+migrate-new:   ## autogenerate a migration: make migrate-new m="add foo"
+	uv run alembic -c packages/db/alembic.ini revision --autogenerate -m "$(m)"
+
+seed:          ## seed demo tenants (idempotent)
+	uv run python -m novaxis_db.seed
+
+dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
+	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
 demo:          ## Chunk 0 demo: API answers, web shows it
 	@echo "Open http://localhost:3000 after 'make up'. Expect: Reachable yes, Health ok."

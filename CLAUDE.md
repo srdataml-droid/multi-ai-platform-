@@ -104,7 +104,8 @@ make up          # docker compose up: postgres, api, worker, web
 make test        # all unit and integration tests
 make evals       # golden-conversation evals, prints pass rate per pack
 make migrate     # alembic upgrade head
-make seed        # seed one demo tenant per pack
+make seed        # seed one demo tenant per pack (idempotent)
+make dev-token u=owner@demo-hvac   # mint a local JWT for a seeded user
 make demo        # runs the demo script for the current chunk
 ```
 

@@ -1,0 +1,507 @@
+"""core tables, row level security, app role, append-only grants
+
+Revision ID: 684dcad088d0
+Revises:
+Create Date: 2026-09-26 06:38:22.560818
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+revision: str = "0001"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+# Kept as a literal here on purpose: a migration must not change when the models
+# change. packages/db/tests/test_rls.py asserts this list matches
+# novaxis_core.models.TENANT_TABLES so a new table cannot skip RLS.
+TENANT_TABLES = (
+    "locations",
+    "users",
+    "contacts",
+    "conversations",
+    "messages",
+    "jobs",
+    "action_proposals",
+    "approvals",
+    "appointments",
+    "audit_log",
+    "integrations",
+    "metrics_daily",
+)
+APPEND_ONLY_TABLES = ("messages", "audit_log")
+APP_ROLE = "novaxis_app"
+
+CHECKS = {
+    "tenants": [
+        ("ck_tenants_status", "status IN ('active','paused','trial','closed')"),
+    ],
+    "users": [("ck_users_role", "role IN ('owner','staff','viewer','operator')")],
+    "conversations": [
+        (
+            "ck_conversations_status",
+            "status IN ('open','waiting_human','waiting_customer','closed')",
+        ),
+    ],
+    "messages": [
+        ("ck_messages_direction", "direction IN ('inbound','outbound')"),
+        ("ck_messages_author", "author IN ('customer','worker','human','system')"),
+    ],
+    "jobs": [("ck_jobs_state", "state IN ('queued','running','done','failed')")],
+    "action_proposals": [
+        ("ck_action_proposals_risk", "risk IN ('low','medium','high')"),
+        (
+            "ck_action_proposals_state",
+            "state IN ('proposed','auto_approved','awaiting','approved',"
+            "'rejected','executed','failed')",
+        ),
+    ],
+    "approvals": [("ck_approvals_decision", "decision IN ('approve','reject','edit')")],
+    "appointments": [
+        (
+            "ck_appointments_status",
+            "status IN ('proposed','held','confirmed','cancelled','completed','no_show')",
+        ),
+        ("ck_appointments_window", "ends_at > starts_at"),
+    ],
+}
+
+
+def _tenant_predicate(column: str) -> str:
+    # NULLIF: after a SET LOCAL ends, Postgres reports a placeholder setting as ''
+    # rather than NULL, and ''::uuid would raise instead of matching nothing.
+    return f"{column} = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
+
+
+def _secure() -> None:
+    for table, checks in CHECKS.items():
+        for name, expr in checks:
+            op.create_check_constraint(name, table, expr)
+    # The queue pick (Chunk 3) scans by state and run_after.
+    op.create_index("ix_jobs_pick", "jobs", ["state", "run_after"])
+    op.create_index("ix_audit_log_subject", "audit_log", ["subject_table", "subject_id"])
+
+    op.execute(
+        f"""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN
+                CREATE ROLE {APP_ROLE} NOLOGIN;
+            END IF;
+            EXECUTE format('GRANT {APP_ROLE} TO %I', current_user);
+        END $$;
+        """
+    )
+    op.execute(f"GRANT USAGE ON SCHEMA public TO {APP_ROLE}")
+
+    # tenants: a tenant may read and update its own row, never insert or delete.
+    op.execute(f"GRANT SELECT, UPDATE ON tenants TO {APP_ROLE}")
+    op.execute("ALTER TABLE tenants ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE tenants FORCE ROW LEVEL SECURITY")
+    op.execute(
+        f"CREATE POLICY tenant_isolation ON tenants FOR ALL TO {APP_ROLE} "
+        f"USING ({_tenant_predicate('id')}) WITH CHECK ({_tenant_predicate('id')})"
+    )
+
+    for table in TENANT_TABLES:
+        privileges = (
+            "SELECT, INSERT" if table in APPEND_ONLY_TABLES else "SELECT, INSERT, UPDATE, DELETE"
+        )
+        op.execute(f"GRANT {privileges} ON {table} TO {APP_ROLE}")
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+        op.execute(
+            f"CREATE POLICY tenant_isolation ON {table} FOR ALL TO {APP_ROLE} "
+            f"USING ({_tenant_predicate('tenant_id')}) "
+            f"WITH CHECK ({_tenant_predicate('tenant_id')})"
+        )
+
+
+def _unsecure() -> None:
+    for table in (*TENANT_TABLES, "tenants"):
+        op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
+    op.execute(f"REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM {APP_ROLE}")
+    op.execute(f"REVOKE USAGE ON SCHEMA public FROM {APP_ROLE}")
+    op.execute(
+        f"""
+        DO $$ BEGIN
+            EXECUTE format('REVOKE {APP_ROLE} FROM %I', current_user);
+        END $$;
+        """
+    )
+    op.execute(f"DROP ROLE IF EXISTS {APP_ROLE}")
+
+
+def upgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table(
+        "tenants",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("slug", sa.String(length=80), nullable=False),
+        sa.Column("pack_id", sa.String(length=40), nullable=False),
+        sa.Column(
+            "settings",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("plan", sa.String(length=40), server_default="trial", nullable=False),
+        sa.Column("status", sa.String(length=20), server_default="trial", nullable=False),
+        sa.Column("worker_enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("data_region", sa.String(length=10), server_default="uk", nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("slug"),
+    )
+    op.create_table(
+        "audit_log",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("actor", sa.String(length=120), nullable=False),
+        sa.Column("event", sa.String(length=80), nullable=False),
+        sa.Column("subject_table", sa.String(length=60), nullable=True),
+        sa.Column("subject_id", sa.UUID(), nullable=True),
+        sa.Column(
+            "diff",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_audit_log_tenant_id"), "audit_log", ["tenant_id"], unique=False)
+    op.create_table(
+        "contacts",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("display_name", sa.String(length=200), nullable=True),
+        sa.Column(
+            "phones",
+            postgresql.ARRAY(sa.String(length=32)),
+            server_default=sa.text("'{}'"),
+            nullable=False,
+        ),
+        sa.Column(
+            "emails",
+            postgresql.ARRAY(sa.String(length=320)),
+            server_default=sa.text("'{}'"),
+            nullable=False,
+        ),
+        sa.Column(
+            "consent",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "pack_fields",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("merged_into", sa.UUID(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["merged_into"], ["contacts.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_contacts_tenant_id"), "contacts", ["tenant_id"], unique=False)
+    op.create_table(
+        "integrations",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("provider", sa.String(length=60), nullable=False),
+        sa.Column("encrypted_credentials", sa.LargeBinary(), nullable=True),
+        sa.Column(
+            "config",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("health", sa.String(length=20), server_default="unknown", nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_integrations_tenant_id"), "integrations", ["tenant_id"], unique=False)
+    op.create_table(
+        "jobs",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("kind", sa.String(length=60), nullable=False),
+        sa.Column(
+            "payload",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("state", sa.String(length=20), server_default="queued", nullable=False),
+        sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
+        sa.Column(
+            "run_after", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+        ),
+        sa.Column("locked_by", sa.String(length=120), nullable=True),
+        sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_jobs_tenant_id"), "jobs", ["tenant_id"], unique=False)
+    op.create_table(
+        "locations",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("address", sa.Text(), nullable=True),
+        sa.Column("timezone", sa.String(length=64), server_default="Europe/London", nullable=False),
+        sa.Column("calendar_ref", sa.String(length=200), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_locations_tenant_id"), "locations", ["tenant_id"], unique=False)
+    op.create_table(
+        "metrics_daily",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("day", sa.DateTime(), nullable=False),
+        sa.Column("channel", sa.String(length=40), nullable=False),
+        sa.Column("inbound", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("answered_under_10s", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("intake_completed", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("bookings_proposed", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("bookings_approved", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("escalations", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("human_takeovers", sa.Integer(), server_default="0", nullable=False),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_metrics_daily_tenant_id"), "metrics_daily", ["tenant_id"], unique=False
+    )
+    op.create_table(
+        "users",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("auth_subject", sa.String(length=200), nullable=False),
+        sa.Column("email", sa.String(length=320), nullable=False),
+        sa.Column("role", sa.String(length=20), nullable=False),
+        sa.Column("display_name", sa.String(length=200), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("auth_subject"),
+    )
+    op.create_index(op.f("ix_users_tenant_id"), "users", ["tenant_id"], unique=False)
+    op.create_table(
+        "appointments",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("location_id", sa.UUID(), nullable=True),
+        sa.Column("contact_id", sa.UUID(), nullable=False),
+        sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("ends_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("service_code", sa.String(length=60), nullable=False),
+        sa.Column("status", sa.String(length=20), server_default="proposed", nullable=False),
+        sa.Column("external_ref", sa.String(length=200), nullable=True),
+        sa.Column("hold_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["contact_id"], ["contacts.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["location_id"], ["locations.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_appointments_tenant_id"), "appointments", ["tenant_id"], unique=False)
+    op.create_table(
+        "conversations",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("contact_id", sa.UUID(), nullable=False),
+        sa.Column("channel", sa.String(length=40), nullable=False),
+        sa.Column("status", sa.String(length=20), server_default="open", nullable=False),
+        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column(
+            "extracted",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("owner_user_id", sa.UUID(), nullable=True),
+        sa.Column("takeover_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["contact_id"], ["contacts.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["owner_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_conversations_tenant_id"), "conversations", ["tenant_id"], unique=False
+    )
+    op.create_table(
+        "action_proposals",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("conversation_id", sa.UUID(), nullable=True),
+        sa.Column("kind", sa.String(length=60), nullable=False),
+        sa.Column(
+            "params",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column("risk", sa.String(length=10), nullable=False),
+        sa.Column("reason", sa.Text(), nullable=True),
+        sa.Column("state", sa.String(length=20), server_default="proposed", nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["conversation_id"], ["conversations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_action_proposals_tenant_id"), "action_proposals", ["tenant_id"], unique=False
+    )
+    op.create_table(
+        "messages",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("conversation_id", sa.UUID(), nullable=False),
+        sa.Column("direction", sa.String(length=10), nullable=False),
+        sa.Column("channel", sa.String(length=40), nullable=False),
+        sa.Column("author", sa.String(length=20), nullable=False),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("provider_ref", sa.String(length=200), nullable=True),
+        sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["conversation_id"], ["conversations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_messages_conversation_id"), "messages", ["conversation_id"], unique=False
+    )
+    op.create_index(op.f("ix_messages_tenant_id"), "messages", ["tenant_id"], unique=False)
+    op.create_table(
+        "approvals",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("proposal_id", sa.UUID(), nullable=False),
+        sa.Column("decided_by", sa.UUID(), nullable=True),
+        sa.Column("decision", sa.String(length=10), nullable=False),
+        sa.Column("note", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["decided_by"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["proposal_id"], ["action_proposals.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_approvals_tenant_id"), "approvals", ["tenant_id"], unique=False)
+    # ### end Alembic commands ###
+    _secure()
+
+
+def downgrade() -> None:
+    _unsecure()
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f("ix_approvals_tenant_id"), table_name="approvals")
+    op.drop_table("approvals")
+    op.drop_index(op.f("ix_messages_tenant_id"), table_name="messages")
+    op.drop_index(op.f("ix_messages_conversation_id"), table_name="messages")
+    op.drop_table("messages")
+    op.drop_index(op.f("ix_action_proposals_tenant_id"), table_name="action_proposals")
+    op.drop_table("action_proposals")
+    op.drop_index(op.f("ix_conversations_tenant_id"), table_name="conversations")
+    op.drop_table("conversations")
+    op.drop_index(op.f("ix_appointments_tenant_id"), table_name="appointments")
+    op.drop_table("appointments")
+    op.drop_index(op.f("ix_users_tenant_id"), table_name="users")
+    op.drop_table("users")
+    op.drop_index(op.f("ix_metrics_daily_tenant_id"), table_name="metrics_daily")
+    op.drop_table("metrics_daily")
+    op.drop_index(op.f("ix_locations_tenant_id"), table_name="locations")
+    op.drop_table("locations")
+    op.drop_index(op.f("ix_jobs_tenant_id"), table_name="jobs")
+    op.drop_table("jobs")
+    op.drop_index(op.f("ix_integrations_tenant_id"), table_name="integrations")
+    op.drop_table("integrations")
+    op.drop_index(op.f("ix_contacts_tenant_id"), table_name="contacts")
+    op.drop_table("contacts")
+    op.drop_index(op.f("ix_audit_log_tenant_id"), table_name="audit_log")
+    op.drop_table("audit_log")
+    op.drop_table("tenants")
+    # ### end Alembic commands ###
