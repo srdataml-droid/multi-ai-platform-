@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.llm import LLMClient
 from novaxis_core.models import AuditLog, Conversation, Job, Tenant
+from novaxis_core.notify import notify_staff
 from novaxis_core.outbound import send_message
 from novaxis_core.packspec import PackSpec
 from novaxis_core.settings import get_settings
@@ -92,8 +93,16 @@ def _handle_send_message(session: Session, tenant: Tenant, job: Job) -> None:
     send_message(session, tenant, uuid.UUID(job.payload["message_id"]))
 
 
+def _handle_notify_staff(session: Session, tenant: Tenant, job: Job) -> None:
+    notify_staff(session, tenant, uuid.UUID(job.payload["proposal_id"]))
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
-    return {"worker_turn": _handle_worker_turn(pack_for, llm), "send_message": _handle_send_message}
+    return {
+        "worker_turn": _handle_worker_turn(pack_for, llm),
+        "send_message": _handle_send_message,
+        "notify_staff": _handle_notify_staff,
+    }
 
 
 def _fail(session: Session, job: Job, error: str, attempts: int) -> None:

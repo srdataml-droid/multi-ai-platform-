@@ -6,7 +6,7 @@ dashboard, per-industry packs. See `CLAUDE.md` for the rules and `docs/ARCHITECT
 
 ## Status
 
-Chunks 0 to 3 done: skeleton and CI; core tables with row-level security; JWT auth; three channel adapters with the shared inbound path; the worker loop (lease, retry, hand to human) and the first LLM turn with proposals, extraction, disclosure, emergency pre-check and summaries. Chunk 4 (the action model and approval gate) is next.
+Chunks 0 to 4 done: skeleton and CI; core tables with row-level security; JWT auth; three channel adapters with the shared inbound path; the worker loop and the LLM turn; the action registry, the approval gate as one pure function with a 50-row table test, executors as the only side-effect path, and the approvals API. Chunk 5 (pack framework and the HVAC pack) is next.
 
 ## Where things are
 

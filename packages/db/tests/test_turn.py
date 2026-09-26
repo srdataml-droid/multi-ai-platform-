@@ -10,7 +10,7 @@ from sqlalchemy import select
 from novaxis_core.channels import NormalisedInbound
 from novaxis_core.inbound import ingest
 from novaxis_core.llm import FakeLLM, ToolCall
-from novaxis_core.models import ActionProposal, Conversation, Message, Tenant, UsageEvent
+from novaxis_core.models import ActionProposal, Conversation, Job, Message, Tenant, UsageEvent
 from novaxis_core.turn import run_turn
 from novaxis_db.seed import seed
 from novaxis_db.session import service_session, tenant_session
@@ -73,11 +73,20 @@ def test_turn_stores_reply_proposals_extracts_and_usage(hvac: Tenant) -> None:
         conv = s.get(Conversation, conv_id)
         assert conv is not None and conv.extracted == {"problem": "boiler noise"}
         assert conv.status == "waiting_customer"
-        proposals = list(
-            s.scalars(select(ActionProposal).where(ActionProposal.conversation_id == conv_id))
-        )
-        assert [p.kind for p in proposals] == ["propose_appointment"]
-        assert proposals[0].risk == "low" and proposals[0].state == "proposed"
+        by_kind = {
+            p.kind: p
+            for p in s.scalars(
+                select(ActionProposal).where(ActionProposal.conversation_id == conv_id)
+            )
+        }
+        assert set(by_kind) == {"extract_fields", "propose_appointment", "reply"}
+        assert by_kind["extract_fields"].state == "executed"
+        assert by_kind["propose_appointment"].risk == "medium"
+        assert by_kind["propose_appointment"].state == "awaiting"
+        assert by_kind["reply"].state == "executed"
+        notify = s.scalar(select(Job).where(Job.kind == "notify_staff"))
+        assert notify is not None
+        assert notify.payload["proposal_id"] == str(by_kind["propose_appointment"].id)
         usage = list(s.scalars(select(UsageEvent)))
         assert any(u.kind == "llm.worker_turn" and u.quantity == 15 for u in usage)
     call = fake.calls[0]
@@ -160,13 +169,15 @@ def test_emergency_keyword_bypasses_the_model(hvac: Tenant) -> None:
     with tenant_session(hvac.id) as s:
         reply = s.get(Message, r.reply_message_id)
         assert reply is not None and "emergency services" in reply.body
-        kinds = [
-            p.kind
+        states = {
+            p.kind: p.state
             for p in s.scalars(
                 select(ActionProposal).where(ActionProposal.conversation_id == conv_id)
             )
-        ]
-        assert kinds == ["escalate_emergency"]
+        }
+        assert states["escalate_emergency"] in ("executed", "failed"), "auto-approved, attempted"
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None and conv.status == "waiting_human"
 
 
 def test_booking_claim_without_proposal_is_flagged(hvac: Tenant) -> None:
@@ -204,3 +215,42 @@ def test_summary_regenerates_every_ten_messages(hvac: Tenant) -> None:
         conv = s.get(Conversation, conv_id)
         assert conv is not None and conv.summary and conv.summary.startswith("Summary:")
     assert [c["task"] for c in fake.calls] == ["worker_turn", "summarise"]
+
+
+def test_high_risk_proposal_is_rejected_and_reply_says_a_person_will_follow_up(
+    hvac: Tenant,
+) -> None:
+    conv_id = _new_conversation(hvac, "can you charge my card now")
+    fake = FakeLLM(
+        script=[
+            (
+                "Sure, let me take payment.",
+                [ToolCall("collect_payment", {"amount_minor": 5000, "currency": "GBP"}, "t")],
+            )
+        ]
+    )
+    with tenant_session(hvac.id) as s:
+        r = run_turn(s, hvac, get_pack("hvac"), fake, conv_id)
+    assert r.decisions["collect_payment"] == "rejected" and r.decisions["reply"] == "auto_approved"
+    with tenant_session(hvac.id) as s:
+        reply = s.get(Message, r.reply_message_id)
+        assert reply is not None and "A member of the team will follow up" in reply.body
+
+
+def test_safeguarding_message_stops_the_reply_and_hands_to_human(hvac: Tenant) -> None:
+    conv_id = _new_conversation(hvac, "my daughter is 8 years old and home alone with the leak")
+    fake = FakeLLM(script=[("I can help with that.", [])])
+    with tenant_session(hvac.id) as s:
+        r = run_turn(s, hvac, get_pack("hvac"), fake, conv_id)
+    assert r.reply_message_id is None and r.decisions["reply"] == "rejected"
+    with tenant_session(hvac.id) as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None and conv.status == "waiting_human"
+        assert (
+            s.scalar(
+                select(Message).where(
+                    Message.conversation_id == conv_id, Message.direction == "outbound"
+                )
+            )
+            is None
+        )

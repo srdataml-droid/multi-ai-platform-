@@ -227,6 +227,14 @@ class ActionProposal(Base):
     risk: Mapped[str] = mapped_column(String(10), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(20), nullable=False, server_default="proposed")
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    error: Mapped[str | None] = mapped_column(Text)
+    superseded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("action_proposals.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = _created_at()
 
 

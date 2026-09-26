@@ -37,13 +37,15 @@ seed:          ## seed demo tenants (idempotent)
 dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
 	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
-demo:          ## Chunk 3 demo: a web-chat message gets a worker reply
+demo:          ## Chunk 4 demo: "I smell gas" escalates without the model; approvals queue via API
 	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running: make up (or uv run uvicorn novaxis_api.main:app)"; exit 1)
 	@R=$$(curl -s -X POST http://localhost:8000/inbound/webchat/demo-hvac -H 'Content-Type: application/json' \
-	  -d '{"body":"Hi, my boiler is making a banging noise","name":"Demo Visitor"}'); echo "$$R"; \
+	  -d '{"body":"I smell gas in the kitchen and the boiler is hissing"}'); echo "$$R"; \
 	T=$$(echo "$$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["visitor_token"])'); \
 	uv run python -m novaxis_worker.main --once; \
-	curl -s "http://localhost:8000/inbound/webchat/demo-hvac/messages?visitor_token=$$T" | python3 -m json.tool
+	curl -s "http://localhost:8000/inbound/webchat/demo-hvac/messages?visitor_token=$$T" | python3 -m json.tool; \
+	TOK=$$(uv run python -m novaxis_api.devtoken owner@demo-hvac); \
+	echo "--- approvals awaiting ---"; curl -s http://localhost:8000/approvals -H "Authorization: Bearer $$TOK" | python3 -m json.tool
 
 worker-once:   ## drain the job queue once and exit
 	uv run python -m novaxis_worker.main --once

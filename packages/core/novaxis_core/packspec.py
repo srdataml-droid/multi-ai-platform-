@@ -7,8 +7,13 @@ intake question, and hard-coded emergency phrases checked before any LLM call.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+# (kind, params, gate context) -> risk or None. Defined in the pack's rules.py (Chunk 5).
+# Typed loosely here to avoid a circular import with gate.py.
+PackRule = Callable[[str, dict[str, Any], Any], str | None]
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,8 @@ class PackSpec:
     emergency_keywords: tuple[str, ...] = ()
     emergency_reply: str = ""
     vocabulary: dict[str, str] = field(default_factory=dict)
+    rule: PackRule | None = None
+    high_risk_followup: str = "A member of the team will follow up with you on that directly."
 
 
 def proposal_tool(

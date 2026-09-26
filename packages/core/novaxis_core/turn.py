@@ -1,11 +1,14 @@
-"""One worker turn: rows in, one LLM call, rows out.
+"""One worker turn: rows in, one LLM call, rows out, the gate in between.
 
 Context is built from the database every time, never from prior model output
 alone, so a turn is reproducible from rows. The model gets the pack's stable
 system prompt (cached), the tenant's facts, a stored summary if there is one, and
-the last N messages as plain alternating turns. Its text becomes the reply; its
-tool calls become proposals. Chunk 4 adds the gate; here every proposal is stored
-at low risk and nothing but the reply is executed.
+the last N messages as plain alternating turns.
+
+Everything the model wants becomes a proposal, including the reply itself. The
+gate assigns risk; `auto_approved` proposals execute now, `awaiting` ones notify
+staff, `rejected` ones add a "a person will follow up" line to the reply. The
+reply is executed last so it can carry that line.
 """
 
 from __future__ import annotations
@@ -19,6 +22,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from novaxis_core.executors import execute
+from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.llm import LLMClient, LLMResult, ToolCall
 from novaxis_core.models import (
     ActionProposal,
@@ -29,7 +34,7 @@ from novaxis_core.models import (
     Tenant,
     UsageEvent,
 )
-from novaxis_core.outbound import send_message
+from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
 from novaxis_core.settings import get_settings
 
@@ -46,6 +51,7 @@ SUMMARISE_PROMPT = (
     "Summarise this customer conversation in five short lines for a colleague: who, need, "
     "facts given, what was proposed, what is outstanding. No greetings."
 )
+FALLBACK_REPLY = "Thanks, one moment while I check that with the team."
 
 
 @dataclass
@@ -53,6 +59,7 @@ class TurnResult:
     conversation_id: uuid.UUID
     reply_message_id: uuid.UUID | None
     proposal_ids: list[uuid.UUID] = field(default_factory=list)
+    decisions: dict[str, str] = field(default_factory=dict)
     skipped_reason: str | None = None
     emergency: bool = False
 
@@ -131,37 +138,37 @@ def _record_usage(
     )
 
 
-def _store_proposal(
+def propose(
     session: Session,
     tenant: Tenant,
     conv: Conversation,
     kind: str,
     params: dict[str, Any],
-    risk: str,
-    reason: str,
-) -> ActionProposal:
+    ctx: GateContext,
+    origin: str,
+) -> tuple[ActionProposal, Decision]:
+    """Store one proposal with the gate's decision and act on it."""
+    d = decide(kind, params, ctx)
     p = ActionProposal(
         tenant_id=tenant.id,
         conversation_id=conv.id,
         kind=kind,
         params=params,
-        risk=risk,
-        reason=reason,
-        state="proposed",
+        risk=d.risk,
+        reason=f"{origin}: {d.reason}",
+        state=d.state,
     )
     session.add(p)
     session.flush()
-    return p
-
-
-def _apply_extract(conv: Conversation, calls: list[ToolCall]) -> None:
-    """extract_fields is safe to apply immediately: it only records what the customer said."""
-    merged = dict(conv.extracted)
-    for c in calls:
-        if c.name == "extract_fields":
-            fields = c.input.get("fields") or {}
-            merged.update({str(k): str(v) for k, v in fields.items()})
-    conv.extracted = merged
+    if d.state == "auto_approved":
+        execute(session, tenant, p)
+    elif d.state == "awaiting":
+        enqueue_staff_notification(session, tenant, p.id)
+    else:
+        _audit(
+            session, tenant.id, "proposal.rejected", proposal_id=p.id, kind=kind, reason=d.reason
+        )
+    return p, d
 
 
 def _emergency_hit(pack: PackSpec, text: str) -> bool:
@@ -196,23 +203,32 @@ def run_turn(
     first_worker_reply = not any(
         m.direction == "outbound" and m.author == "worker" for m in history
     )
-
-    proposal_ids: list[uuid.UUID] = []
+    ctx = GateContext(
+        tenant_settings=tenant.settings,
+        contact_consent=contact.consent,
+        latest_inbound_text=last_inbound.body if last_inbound else "",
+        conversation_channel=conv.channel,
+        pack_rule=pack.rule,
+    )
+    result_ids: list[uuid.UUID] = []
+    decisions: dict[str, str] = {}
     emergency = bool(last_inbound and _emergency_hit(pack, last_inbound.body))
+    tool_calls: list[ToolCall] = []
 
     if emergency:
         # Keyword pre-check: no model in the loop for the dangerous branch.
         reply_text = pack.emergency_reply
-        p = _store_proposal(
+        p, d = propose(
             session,
             tenant,
             conv,
             "escalate_emergency",
             {"summary": last_inbound.body[:500] if last_inbound else ""},
-            "low",
+            ctx,
             "emergency keyword",
         )
-        proposal_ids.append(p.id)
+        result_ids.append(p.id)
+        decisions["escalate_emergency"] = d.state
         _audit(
             session, tenant.id, "turn.emergency_precheck", conversation_id=conv.id, proposal_id=p.id
         )
@@ -231,35 +247,32 @@ def run_turn(
             max_tokens=1024,
         )
         _record_usage(session, tenant, conv.id, "worker_turn", result)
-        reply_text = result.text or "Thanks, one moment while I check that with the team."
-        _apply_extract(conv, result.tool_calls)
-        for call in result.tool_calls:
-            if call.name == "extract_fields":
-                continue
-            p = _store_proposal(
-                session, tenant, conv, call.name, call.input, "low", "model proposal"
-            )
-            proposal_ids.append(p.id)
-            if call.name == "hand_to_human":
-                conv.status = "waiting_human"
-        if (
-            BOOKING_CLAIMS.search(reply_text)
-            and not {c.name for c in result.tool_calls} & CLAIM_TOOLS
-        ):
-            p = _store_proposal(
+        reply_text = result.text or FALLBACK_REPLY
+        tool_calls = result.tool_calls
+        followup_needed = False
+        for call in tool_calls:
+            p, d = propose(session, tenant, conv, call.name, call.input, ctx, "model proposal")
+            result_ids.append(p.id)
+            decisions[call.name] = d.state
+            if d.state == "rejected":
+                followup_needed = True
+        if BOOKING_CLAIMS.search(reply_text) and not {c.name for c in tool_calls} & CLAIM_TOOLS:
+            p, d = propose(
                 session,
                 tenant,
                 conv,
                 "verify_claim",
                 {"text": reply_text},
-                "medium",
+                ctx,
                 "reply claims a booking without a proposal",
             )
-            p.state = "awaiting"
-            proposal_ids.append(p.id)
+            result_ids.append(p.id)
+            decisions["verify_claim"] = d.state
             _audit(
                 session, tenant.id, "turn.verify_claim", conversation_id=conv.id, proposal_id=p.id
             )
+        if followup_needed and pack.high_risk_followup not in reply_text:
+            reply_text = f"{reply_text}\n\n{pack.high_risk_followup}"
 
     if first_worker_reply:
         disclosure = (
@@ -270,28 +283,29 @@ def run_turn(
         if disclosure:
             reply_text = f"{disclosure}\n\n{reply_text}"
 
-    out = Message(
-        tenant_id=tenant.id,
-        conversation_id=conv.id,
-        direction="outbound",
-        channel=conv.channel,
-        author="worker",
-        body=reply_text,
-    )
-    session.add(out)
-    session.flush()
-    send_message(session, tenant, out.id)
+    # The reply is an action too. It goes through the gate like everything else, so an
+    # opted-out contact or a safeguarding hit stops it here rather than in a special case.
+    reply_p, reply_d = propose(session, tenant, conv, "reply", {"text": reply_text}, ctx, "reply")
+    result_ids.append(reply_p.id)
+    decisions["reply"] = reply_d.state
+    reply_message_id: uuid.UUID | None = None
+    if reply_p.state == "executed":
+        reply_message_id = uuid.UUID(str(reply_p.result.get("message_id")))
+    elif reply_d.state == "rejected":
+        conv.status = "waiting_human"
+
     conv.updated_at = datetime.now(UTC)
     if conv.status == "open":
         conv.status = "waiting_customer"
 
     total = len(history) + 1
-    if total and total % settings.summary_every_messages == 0 and not emergency:
+    if reply_message_id and total % settings.summary_every_messages == 0 and not emergency:
+        out = session.get(Message, reply_message_id)
         summary = llm.complete(
             task="summarise",
             system_stable=SUMMARISE_PROMPT,
             system_volatile="",
-            messages=build_messages(history + [out]),
+            messages=build_messages(history + ([out] if out else [])),
             max_tokens=400,
         )
         _record_usage(session, tenant, conv.id, "summarise", summary)
@@ -301,7 +315,7 @@ def run_turn(
         tenant.id,
         "turn.completed",
         conversation_id=conv.id,
-        message_id=out.id,
-        proposals=len(proposal_ids),
+        message_id=reply_message_id,
+        proposals=len(result_ids),
     )
-    return TurnResult(conv.id, out.id, proposal_ids, emergency=emergency)
+    return TurnResult(conv.id, reply_message_id, result_ids, decisions, emergency=emergency)
