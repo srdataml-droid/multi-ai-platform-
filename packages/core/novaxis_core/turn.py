@@ -367,9 +367,10 @@ def run_turn(
             reply_text = f"{reply_text}\n\n{pack.high_risk_followup}"
 
     if first_worker_reply:
+        # replace, not format: an owner's own braces in the text must not break every reply.
         disclosure = (
             str(tenant.settings.get("disclosure_text", ""))
-            .format(business_name=tenant.name)
+            .replace("{business_name}", tenant.name)
             .strip()
         )
         if disclosure:

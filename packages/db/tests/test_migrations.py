@@ -21,3 +21,13 @@ def test_upgrade_downgrade_upgrade(db_url: str) -> None:
     migrate.downgrade(db_url, "base")
     assert _table_names(db_url) <= {"alembic_version"}
     migrate.upgrade(db_url, "head")
+
+
+def test_ensure_schema_catches_up_once_then_does_nothing(db_url: str) -> None:
+    migrate.upgrade(db_url, "head")
+    assert migrate.ensure_schema(db_url) is False
+    migrate.downgrade(db_url, "-1")
+    behind = migrate.current(db_url)
+    assert migrate.ensure_schema(db_url) is True
+    assert migrate.current(db_url) != behind
+    assert migrate.ensure_schema(db_url) is False

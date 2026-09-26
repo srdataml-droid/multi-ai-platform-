@@ -62,6 +62,8 @@ export function Nav() {
     else if (me.role === "owner" && me.tenant && !me.tenant.onboarded && !path.startsWith("/onboarding")) router.replace("/onboarding");
   }, [me, console_, path, router]);
   const links = console_ ? OPERATOR_LINKS : LINKS;
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [path]);
   const exit = () => {
     exitTenant();
     router.replace("/operator");
@@ -69,7 +71,20 @@ export function Nav() {
   };
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white p-4">
+    <>
+      {/* Phones: a top bar with a menu button; the side menu opens below it. */}
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">Novaxis Worker</div>
+          <div className="truncate text-xs text-slate-500">{console_ ? "Operator console" : me?.tenant?.name ?? ""}</div>
+          {me?.acting && <button className="text-xs text-amber-800 underline" onClick={exit}>Operator view: exit</button>}
+        </div>
+        <button aria-label="Menu" aria-expanded={menuOpen} className="flex items-center gap-2 rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setMenuOpen(!menuOpen)}>
+          {awaiting > 0 && <span className="rounded-full bg-amber-500 px-2 text-xs text-white">{awaiting}</span>}
+          {menuOpen ? "Close" : "Menu"}
+        </button>
+      </header>
+    <aside className={`${menuOpen ? "flex" : "hidden"} w-full shrink-0 flex-col border-b border-slate-200 bg-white p-4 md:flex md:w-56 md:border-b-0 md:border-r`}>
       <div className="mb-6">
         <div className="text-sm font-semibold">Novaxis Worker</div>
         <div className="text-xs text-slate-500">{console_ ? "Operator console" : pack?.name ?? me?.tenant?.pack_id ?? ""}</div>
@@ -96,6 +111,7 @@ export function Nav() {
         <button className="mt-2 underline" onClick={() => { setToken(null); router.replace("/login"); }}>Sign out</button>
       </div>
     </aside>
+    </>
   );
 }
 

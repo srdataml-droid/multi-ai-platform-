@@ -20,7 +20,7 @@ export default function AnalyticsPage() {
     <div className="flex flex-col gap-4">
       <ErrorLine error={error} />
       <Card title="Last 30 days">
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {LABELS.map(([k, label]) => (
             <div key={k} className="rounded border border-slate-200 p-3">
               <div className="text-xs text-slate-500">{label}</div>
@@ -31,6 +31,7 @@ export default function AnalyticsPage() {
         <p className="mt-3 text-xs text-slate-500">Rolled up hourly from the raw rows. Sensitive fields are never counted.</p>
       </Card>
       <Card title="By day and channel">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-1">Day</th><th>Channel</th>{LABELS.map(([k, l]) => <th key={k}>{l}</th>)}</tr></thead>
           <tbody>
@@ -39,6 +40,7 @@ export default function AnalyticsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

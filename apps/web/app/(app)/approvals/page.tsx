@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
 import { post } from "@/lib/api";
+import { summarise } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
@@ -38,8 +39,16 @@ export default function ApprovalsPage() {
       {(data?.items ?? []).map((p) => (
         <Card key={p.id} title={p.kind.replace(/_/g, " ")} actions={<Badge tone={p.risk === "high" ? "red" : "amber"}>{p.risk}</Badge>}>
           <p className="mb-2 text-xs text-slate-500">{p.reason} · {ago(p.created_at)} · {p.conversation_id && <Link className="text-blue-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link>}</p>
-          <textarea data-testid={`params-${p.id}`} className="mb-3 w-full rounded border border-slate-300 p-2 font-mono text-xs" rows={4} value={editing[p.id] ?? JSON.stringify(p.params, null, 2)} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: e.target.value }))} />
-          <div className="flex gap-2">
+          <dl className="mb-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm" data-testid={`summary-${p.id}`}>
+            {summarise(p.params).map(([k, v]) => (
+              <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words">{v}</dd></div>
+            ))}
+          </dl>
+          <details className="mb-3">
+            <summary className="cursor-pointer text-xs text-slate-500">Edit details before approving</summary>
+            <textarea data-testid={`params-${p.id}`} className="mt-2 w-full rounded border border-slate-300 p-2 font-mono text-xs" rows={4} value={editing[p.id] ?? JSON.stringify(p.params, null, 2)} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: e.target.value }))} />
+          </details>
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => decide(p, "approve")} disabled={busy === p.id}>Approve</Button>
             <Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !editing[p.id]}>Approve with edits</Button>
             <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Reject</Button>

@@ -10,7 +10,7 @@
   var key = "novaxis:" + tenant + ":visitor";
   var token = null;
   try { token = localStorage.getItem(key); } catch {}
-  var lastId = null;
+  var lastId = null, loaded = false;
 
   var css = "#nvx-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:28px;border:0;background:#1f2937;color:#fff;font-size:24px;cursor:pointer;z-index:99999}" +
     "#nvx-box{position:fixed;right:20px;bottom:88px;width:340px;max-width:calc(100vw - 40px);height:440px;max-height:70vh;background:#fff;border:1px solid #d1d5db;border-radius:12px;display:none;flex-direction:column;font:14px system-ui,sans-serif;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,.15)}" +
@@ -30,7 +30,9 @@
     if (!token) return;
     var url = api + "/inbound/webchat/" + encodeURIComponent(tenant) + "/messages?visitor_token=" + encodeURIComponent(token) + (lastId ? "&after=" + encodeURIComponent(lastId) : "");
     fetch(url).then(function (r) { return r.ok ? r.json() : { messages: [] }; }).then(function (data) {
-      (data.messages || []).forEach(function (m) { if (m.direction === "outbound") add("outbound", m.body); lastId = m.id; });
+      // The first load after a page change shows the whole thread; later polls only replies.
+      (data.messages || []).forEach(function (m) { if (m.direction === "outbound" || !loaded) add(m.direction, m.body); lastId = m.id; });
+      loaded = true;
     }).catch(function () {});
   }
   btn.onclick = function () { box.style.display = box.style.display === "flex" ? "none" : "flex"; if (box.style.display === "flex") { input.focus(); poll(); } };
@@ -46,5 +48,6 @@
       if (data.message_id) lastId = data.message_id;
     }).catch(function () { add("outbound", "Sorry, something went wrong sending that. Please try again."); });
   };
-  setInterval(poll, 3000);
+  // Poll only while the chat is open: a closed widget on every page view costs nothing.
+  setInterval(function () { if (box.style.display === "flex") poll(); }, 3000);
 })();

@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.actions import ACTIONS, RISK_ORDER
-from novaxis_core.models import AuditLog, Tenant, User
+from novaxis_core.models import AuditLog, Location, Tenant, User
 from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import TenantSettings
 
@@ -89,6 +89,9 @@ def write_settings(
                 )
         t.settings = validated.model_dump()
         changes["settings"] = True
+        # Slots are computed in the location's time zone; keep it in step with settings.
+        for loc in session.scalars(select(Location)):
+            loc.timezone = validated.timezone
     if body.name is not None:
         t.name = body.name
         changes["name"] = body.name

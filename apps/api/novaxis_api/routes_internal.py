@@ -37,7 +37,12 @@ def _check(authorization: str | None) -> None:
 @router.get("/tick")
 def internal_tick(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     _check(authorization)
-    return {"jobs_run": drain_for(budget_seconds=40)}
+    try:
+        return {"jobs_run": drain_for(budget_seconds=40, raise_errors=True)}
+    except Exception as exc:  # noqa: BLE001 - the timer must see a failure as a failure
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"tick failed: {type(exc).__name__}"
+        ) from exc
 
 
 @router.post("/migrate")

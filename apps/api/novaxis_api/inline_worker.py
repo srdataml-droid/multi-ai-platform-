@@ -31,8 +31,15 @@ def _worker_id() -> str:
     return "inline:" + default_worker_id()
 
 
-def drain_for(budget_seconds: float | None = None, max_jobs: int = 50) -> int:
-    """Run jobs until the queue is empty, the budget is spent, or max_jobs ran."""
+def drain_for(
+    budget_seconds: float | None = None, max_jobs: int = 50, raise_errors: bool = False
+) -> int:
+    """Run jobs until the queue is empty, the budget is spent, or max_jobs ran.
+
+    A failing job is handled inside `tick` (backoff, then hand-off). An exception here means
+    the loop itself is broken (database down, schema behind). After a request that is
+    swallowed so the customer's message is still accepted; the timer passes
+    `raise_errors=True` so the failure shows up as an error, not as "0 jobs"."""
     budget = (
         get_settings().inline_worker_budget_seconds if budget_seconds is None else budget_seconds
     )
@@ -44,6 +51,8 @@ def drain_for(budget_seconds: float | None = None, max_jobs: int = 50) -> int:
                 break
         except Exception:  # noqa: BLE001 - never fail the request because a job failed
             log.exception("inline tick failed")
+            if raise_errors:
+                raise
             break
         ran += 1
     return ran

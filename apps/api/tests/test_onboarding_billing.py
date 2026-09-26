@@ -256,3 +256,17 @@ def test_operator_console_lists_enters_with_audit_and_simulates(client: TestClie
     with service_session() as s:
         ops_id = s.scalar(select(Tenant.id).where(Tenant.slug == "novaxis-ops"))
     assert client.post(f"/operator/tenants/{ops_id}/enter", headers=OPERATOR).status_code == 404
+
+
+def test_wizard_time_zone_reaches_the_diary(client: TestClient) -> None:
+    from novaxis_core.models import Location
+
+    new = _signup(client)
+    answers = _answers(client, new["headers"])
+    answers["timezone"] = "America/New_York"
+    assert client.post("/onboarding", headers=new["headers"], json=answers).status_code == 200
+    with service_session() as s:
+        tz = s.scalar(
+            select(Location.timezone).where(Location.tenant_id == uuid.UUID(new["tenant_id"]))
+        )
+    assert tz == "America/New_York", "slots are computed in the location's zone"

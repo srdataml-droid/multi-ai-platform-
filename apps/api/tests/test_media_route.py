@@ -96,3 +96,15 @@ def test_viewer_and_other_tenant_cannot_open_media(client: TestClient) -> None:
     assert client.get(f"/media/{key}", headers=viewer).status_code == 403
     other = {"Authorization": f"Bearer {mint('dev|owner@demo-hvac')}"}
     assert client.get(f"/media/{key}", headers=other).status_code == 404
+
+
+def test_dot_dot_cannot_climb_into_another_tenants_folder(client: TestClient) -> None:
+    _, key = _ingest_photo()  # a restoration photo
+    with service_session() as s:
+        hvac = s.scalar(select(Tenant.id).where(Tenant.slug == "demo-hvac"))
+    other = {"Authorization": f"Bearer {mint('dev|owner@demo-hvac')}"}
+    # Starts with the caller's own tenant id, then climbs out of it.
+    for climb in (f"{hvac}/%2E%2E/{key}", f"{hvac}/%2e%2e/{key}", f"{hvac}//{key}"):
+        r = client.get(f"/media/{climb}", headers=other)
+        assert r.status_code == 404, (climb, r.status_code)
+        assert r.content != PNG

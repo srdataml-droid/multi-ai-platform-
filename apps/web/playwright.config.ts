@@ -4,6 +4,9 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
+  // One database and one job queue are shared by every spec, and specs run the worker
+  // "once": in parallel, one spec's worker could take another spec's job. Run in series.
+  workers: 1,
   retries: 0,
   use: {
     baseURL: "http://localhost:3000",

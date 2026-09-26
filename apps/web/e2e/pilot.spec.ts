@@ -42,6 +42,7 @@ test("staff approves a proposal and sees the offered slots in the schedule", asy
   await expect(page.getByText(marker).first()).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole("link", { name: /Approvals/ }).click();
+  await page.waitForURL("**/approvals");
   const card = page.locator("section", { hasText: marker }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   await card.getByRole("button", { name: "Approve", exact: true }).click();
@@ -59,6 +60,7 @@ test("a viewer cannot approve", async ({ page, request }) => {
   workerOnce(marker);
   await login(page, "viewer@demo-hvac.test");
   await page.getByRole("link", { name: /Approvals/ }).click();
+  await page.waitForURL("**/approvals");
   const card = page.locator("section", { hasText: marker }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   await card.getByRole("button", { name: "Approve", exact: true }).click();

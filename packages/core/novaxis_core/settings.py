@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     db_pooler: bool = False
     inline_worker: bool = False
     inline_worker_budget_seconds: float = 20.0
+    # Apply pending migrations when a deployment starts, before it serves requests.
+    auto_migrate: bool = False
     # Protects /internal/* (tick, migrate, seed). Empty disables those endpoints.
     cron_secret: str = ""
     # A shared passcode that enables the passwordless demo login outside local.

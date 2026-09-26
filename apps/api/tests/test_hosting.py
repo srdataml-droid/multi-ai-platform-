@@ -117,3 +117,46 @@ def test_vercel_entrypoint_imports_the_app() -> None:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod.app.title == "Novaxis AI Worker API"
+
+
+def test_widget_routes_answer_cross_origin_and_nothing_else_does(env) -> None:  # type: ignore[no-untyped-def]
+    c = env()
+    site = {"Origin": "https://a-plumber.co.uk"}
+    pre = c.options(
+        "/inbound/webchat/demo-hvac",
+        headers={
+            **site,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert pre.status_code == 204
+    assert pre.headers["access-control-allow-origin"] == "*"
+    assert "POST" in pre.headers["access-control-allow-methods"]
+    assert "content-type" in pre.headers["access-control-allow-headers"]
+    sent = c.post("/inbound/webchat/demo-hvac", json={"body": "hello"}, headers=site)
+    assert sent.status_code == 200 and sent.headers["access-control-allow-origin"] == "*"
+    polled = c.get(
+        "/inbound/webchat/demo-hvac/messages",
+        params={"visitor_token": sent.json()["visitor_token"]},
+        headers=site,
+    )
+    assert polled.headers["access-control-allow-origin"] == "*"
+    # Staff routes stay same-origin only.
+    assert "access-control-allow-origin" not in c.get("/health", headers=site).headers
+    assert "access-control-allow-origin" not in c.get("/me", headers=site).headers
+
+
+def test_timer_sees_a_broken_loop_as_a_failure(env, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    from novaxis_api import inline_worker
+
+    c = env(NOVAXIS_CRON_SECRET="s3cret-value")
+
+    def broken(*_a: object, **_k: object) -> bool:
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(inline_worker, "tick", broken)
+    r = c.post("/internal/tick", headers={"Authorization": "Bearer s3cret-value"})
+    assert r.status_code == 500 and "RuntimeError" in r.json()["detail"]
+    # After a customer's request the same failure is swallowed: the message is still accepted.
+    assert inline_worker.drain_for(budget_seconds=1) == 0

@@ -256,3 +256,24 @@ def test_safeguarding_message_stops_the_reply_and_hands_to_human(hvac: Tenant) -
         )
         assert len(out) == 1 and "I can help with that" not in out[0].body
         assert "member of the team will be in touch" in out[0].body
+
+
+def test_owner_braces_in_the_disclosure_do_not_break_replies(hvac: Tenant) -> None:
+    with service_session() as s:
+        t = Tenant(
+            name="Brace & Sons",
+            slug=f"brace-{uuid.uuid4().hex[:8]}",
+            pack_id="hvac",
+            status="active",
+            settings={**hvac.settings, "disclosure_text": "Hi {first name}, {business_name} AI."},
+        )
+        s.add(t)
+        s.flush()
+        s.expunge(t)
+    with tenant_session(t.id) as s:
+        conv_id = ingest(s, t, _webchat("hello", uuid.uuid4().hex[:12])).conversation_id
+    with tenant_session(t.id) as s:
+        r = run_turn(s, t, get_pack("hvac"), FakeLLM(script=[("How can I help?", [])]), conv_id)
+        reply = s.get(Message, r.reply_message_id)
+        assert reply is not None
+        assert reply.body.startswith("Hi {first name}, Brace & Sons AI.")

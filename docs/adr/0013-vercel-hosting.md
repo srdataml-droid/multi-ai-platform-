@@ -40,3 +40,14 @@ short-lived functions.
 - Replies come from the scripted fake model until `ANTHROPIC_API_KEY` is set and
   `NOVAXIS_LLM_PROVIDER=anthropic`.
 - A job that needs longer than the function limit fails and backs off like any other failure.
+
+## Amendment (2026-09-26): migrations run when a deployment starts
+The audit found that each deploy served about a minute of 500 errors. New code went live
+before anyone called `/internal/migrate`, and the ORM selected columns that did not exist
+yet. With `NOVAXIS_AUTO_MIGRATE=true`, `vercel_app.py` now brings the schema to head when a
+new deployment's function first starts, before it serves a request. Concurrent cold starts
+are serialised by a transaction-level advisory lock in `migrations/env.py`, which works
+through the transaction pooler. Migrations must therefore stay additive: a column the old
+code does not know about must not break it. `/internal/migrate` remains for manual use.
+`/internal/tick` now returns 500 when the job loop itself fails, so the timer's history
+shows an outage instead of "0 jobs".
