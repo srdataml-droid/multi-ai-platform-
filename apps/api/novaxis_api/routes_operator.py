@@ -20,6 +20,8 @@ from sqlalchemy import and_, func, select
 from novaxis_api.auth import CurrentPrincipal, Principal
 from novaxis_api.devtoken import mint
 from novaxis_core.billing import HANDLERS, apply_event, demo_event, month_start, provider
+from novaxis_core.bridge import PROVIDER as BRIDGE
+from novaxis_core.bridge import bridge_health
 from novaxis_core.models import AuditLog, Conversation, Integration, Job, Message, Tenant, User
 from novaxis_db.session import service_session
 
@@ -81,12 +83,28 @@ def list_tenants(principal: CurrentPrincipal) -> dict[str, Any]:
         )
         bad_integrations = per_tenant(
             select(Integration.tenant_id, func.count())
-            .where(Integration.tenant_id.in_(ids), Integration.health == "disconnected")
+            .where(
+                Integration.tenant_id.in_(ids),
+                Integration.provider == "google_calendar",
+                Integration.health == "disconnected",
+            )
             .group_by(Integration.tenant_id)
         )
+        bridges = {
+            i.tenant_id: bridge_health(i, now)
+            for i in s.scalars(
+                select(Integration).where(
+                    Integration.tenant_id.in_(ids),
+                    Integration.provider == BRIDGE,
+                    Integration.health != "disconnected",
+                )
+            )
+        }
         items = []
         for t in tenants:
             problems = []
+            if t.id in bridges and not bridges[t.id].ok:
+                problems.append(bridges[t.id].detail)
             if failed.get(t.id):
                 problems.append(f"{failed[t.id]} failed jobs (24h)")
             if stuck.get(t.id):

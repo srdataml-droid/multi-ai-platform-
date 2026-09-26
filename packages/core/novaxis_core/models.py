@@ -46,6 +46,8 @@ PROPOSAL_STATES = (
     "failed",
 )
 APPROVAL_DECISIONS = ("approve", "reject", "edit")
+BRIDGE_ACTIONS = ("create", "update", "cancel")
+BRIDGE_STATUSES = ("queued", "emailed", "not_emailed", "entered")
 APPOINTMENT_STATUSES = ("proposed", "held", "confirmed", "cancelled", "completed", "no_show")
 
 
@@ -346,6 +348,29 @@ class UsageEvent(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class BridgeTicket(Base):
+    """One booking change handed to a vendor tool that has no API (Chunk 11). The office
+    enters it by hand and marks it entered; the reference ties the vendor's next diary
+    export back to our appointment."""
+
+    __tablename__ = "bridge_tickets"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant_fk()
+    ref: Mapped[str] = mapped_column(String(20), nullable=False)
+    action: Mapped[str] = mapped_column(String(10), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    summary: Mapped[str] = mapped_column(String(300), nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="queued")
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    entered_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = _created_at()
+
+
 class BillingEvent(Base):
     """One billing webhook delivery, keyed by the provider's event id. Service-only: the app
     role has no privileges on it. A replayed delivery finds its row and does nothing."""
@@ -380,6 +405,7 @@ TENANT_TABLES: tuple[str, ...] = (
     "integrations",
     "metrics_daily",
     "usage_events",
+    "bridge_tickets",
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")

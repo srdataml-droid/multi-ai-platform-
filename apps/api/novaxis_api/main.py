@@ -14,6 +14,7 @@ from novaxis_api.routes_appointments import router as appointments_router
 from novaxis_api.routes_approvals import router as approvals_router
 from novaxis_api.routes_auth import router as auth_router
 from novaxis_api.routes_billing import router as billing_router
+from novaxis_api.routes_bridge import router as bridge_router
 from novaxis_api.routes_conversations import router as conversations_router
 from novaxis_api.routes_dashboard import router as dashboard_router
 from novaxis_api.routes_inbound import router as inbound_router
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(approvals_router)
     app.include_router(conversations_router)
     app.include_router(media_router)
+    app.include_router(bridge_router)
     app.include_router(integrations_router)
     app.include_router(appointments_router)
     app.include_router(dashboard_router)

@@ -131,6 +131,7 @@ class GoogleCalendar:
         summary: str,
         description: str,
         idempotency_key: str,
+        details: dict[str, str] | None = None,
     ) -> ExternalRef:
         cal = calendar_ref or "primary"
         body = {

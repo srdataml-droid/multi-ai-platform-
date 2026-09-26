@@ -1,0 +1,4 @@
+Appointment Date,Start Time,Duration (mins),Patient,Appointment Status
+2026-10-02,08:40,20,Check-up,Booked
+2026-10-02,09:00,30,Hygienist,Booked
+2026-10-02,,30,Missing time,Booked

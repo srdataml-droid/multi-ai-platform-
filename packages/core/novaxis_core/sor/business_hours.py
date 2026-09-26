@@ -24,6 +24,7 @@ class BusinessHoursCalendar:
         summary: str,
         description: str,
         idempotency_key: str,
+        details: dict[str, str] | None = None,
     ) -> ExternalRef:
         return ExternalRef(self.provider, f"local:{idempotency_key}")
 

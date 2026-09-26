@@ -30,6 +30,17 @@ def _reachable(url: str) -> bool:
         return False
 
 
+@pytest.fixture(autouse=True)
+def _fresh_settings() -> Iterator[None]:
+    """Every test starts from settings built from the real environment. A test that patches
+    env vars and clears the cache inside its own body would otherwise leave settings built
+    from the patched values cached for whichever test runs next."""
+    from novaxis_core.settings import get_settings
+
+    get_settings.cache_clear()
+    yield
+
+
 @pytest.fixture(scope="session")
 def db_url() -> str:
     if not _reachable(TEST_URL):

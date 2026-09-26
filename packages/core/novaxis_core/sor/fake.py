@@ -35,6 +35,7 @@ class FakeCalendar:
         summary: str,
         description: str,
         idempotency_key: str,
+        details: dict[str, str] | None = None,
     ) -> ExternalRef:
         self.calls.append("create")
         if idempotency_key in self._by_key:

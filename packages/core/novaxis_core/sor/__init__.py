@@ -1,4 +1,5 @@
-"""Resolve the tenant's system of record: a connected calendar, else business hours."""
+"""Resolve the tenant's system of record: the vendor bridge if connected (the vendor's diary
+is the real one), else a connected calendar, else business hours."""
 
 from __future__ import annotations
 
@@ -26,6 +27,11 @@ def set_sor_override(fn: Callable[[Tenant], SystemOfRecord] | None) -> None:
 def system_of_record(session: Session, tenant: Tenant) -> SystemOfRecord:
     if _override is not None:
         return _override(tenant)
+    from novaxis_core.bridge import BookingBridge, bridge_integration
+
+    bridge = bridge_integration(session)
+    if bridge is not None:
+        return BookingBridge(session, tenant, bridge)
     integ = session.scalar(
         select(Integration).where(
             Integration.provider == "google_calendar", Integration.health != "disconnected"

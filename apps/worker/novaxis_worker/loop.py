@@ -26,6 +26,8 @@ from novaxis_core.billing import (
     report_daily_usage,
     trial_block_reason,
 )
+from novaxis_core.bridge import EMAIL_JOB as BRIDGE_EMAIL_KIND
+from novaxis_core.bridge import send_ticket_email
 from novaxis_core.llm import LLMClient
 from novaxis_core.media import fetch_media
 from novaxis_core.metrics import ROLLUP_KIND, enqueue_rollups, rollup_recent
@@ -133,10 +135,15 @@ def _handle_report_usage(session: Session, tenant: Tenant, job: Job) -> None:
     job.last_error = f"reported {n}"
 
 
+def _handle_bridge_email(session: Session, tenant: Tenant, job: Job) -> None:
+    job.last_error = send_ticket_email(session, tenant, uuid.UUID(job.payload["ticket_id"]))
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
         ROLLUP_KIND: _handle_rollup,
         REPORT_USAGE_KIND: _handle_report_usage,
+        BRIDGE_EMAIL_KIND: _handle_bridge_email,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,

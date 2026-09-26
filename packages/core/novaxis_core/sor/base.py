@@ -37,6 +37,9 @@ class Health:
 
 
 class SystemOfRecord(Protocol):
+    """`details` on create_booking carries what a person needs to re-key the booking by hand
+    (service code and name, customer name and phone). Calendars with an API may ignore it."""
+
     provider: str
 
     def busy(
@@ -50,6 +53,7 @@ class SystemOfRecord(Protocol):
         summary: str,
         description: str,
         idempotency_key: str,
+        details: dict[str, str] | None = None,
     ) -> ExternalRef: ...
 
     def update_booking(self, ref: ExternalRef, slot: Slot) -> None: ...

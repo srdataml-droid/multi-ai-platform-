@@ -406,6 +406,14 @@ def confirm(
         summary,
         description,
         f"confirm:{proposal_id}",
+        details={
+            "service_code": appt.service_code,
+            "service_name": str(svc.get("name", appt.service_code)),
+            "customer_name": who,
+            "customer_phone": contact.phones[0] if contact and contact.phones else "",
+            "customer_email": contact.emails[0] if contact and contact.emails else "",
+            "appointment_id": str(appt.id),
+        },
     )
     appt.external_ref = f"{ref.provider}:{ref.ref}"
     appt.status = "confirmed"

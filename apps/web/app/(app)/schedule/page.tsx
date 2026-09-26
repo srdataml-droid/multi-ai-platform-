@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HandoffsCard } from "@/components/BookingBridge";
 import { Badge, Card, ErrorLine } from "@/components/ui";
 import { when } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
@@ -17,6 +18,7 @@ export default function SchedulePage() {
   return (
     <div className="flex flex-col gap-4">
       <ErrorLine error={error} />
+      <HandoffsCard />
       {data && !data.items.length && <Card title="Schedule"><p className="text-sm text-slate-500">No appointments in the next 30 days.</p></Card>}
       {[...byDay.entries()].map(([day, items]) => (
         <Card key={day} title={day}>
