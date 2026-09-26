@@ -17,7 +17,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from novaxis_core.models import AuditLog, Contact, Conversation, Job, Message, Tenant
+from novaxis_core.models import (
+    Appointment,
+    AuditLog,
+    Contact,
+    Conversation,
+    Job,
+    Message,
+    Tenant,
+)
 from novaxis_core.packspec import PackSpec
 
 _DURATION = re.compile(r"^(\d+)([mhd])$")
@@ -70,11 +78,14 @@ def schedule_idle_steps(
     return jobs
 
 
-def render(template: str, conv: Conversation, contact: Contact | None) -> str:
+def render(
+    template: str, conv: Conversation, contact: Contact | None, extra: dict[str, str] | None = None
+) -> str:
     values: dict[str, Any] = {k: str(v) for k, v in conv.extracted.items()}
     values.setdefault(
         "name", (contact.display_name if contact and contact.display_name else "there")
     )
+    values.update(extra or {})
 
     class _Safe(dict[str, str]):
         def __missing__(self, key: str) -> str:
@@ -92,16 +103,28 @@ def run_step(session: Session, tenant: Tenant, pack: PackSpec, job: Job) -> str:
     step = next((s for s in pack.workflows if s.id == job.payload.get("step_id")), None)
     if conv is None or step is None:
         return "skipped:missing"
-    if conv.status not in step.only_if_status:
-        return f"skipped:status={conv.status}"
-    anchor = datetime.fromisoformat(job.payload["anchor"])
-    newer = session.scalar(
-        select(Message)
-        .where(Message.conversation_id == conv.id, Message.created_at > anchor)
-        .limit(1)
-    )
-    if newer is not None:
-        return "skipped:activity"
+    extra: dict[str, str] = {"business": tenant.name, "practice": tenant.name}
+    appt_id = job.payload.get("appointment_id")
+    if step.trigger in ("appointment_confirmed", "before_appointment"):
+        appt = session.get(Appointment, uuid.UUID(appt_id)) if appt_id else None
+        if appt is None or appt.status != "confirmed":
+            return "skipped:appointment"
+        if conv.status == "closed":
+            return "skipped:status=closed"
+        from novaxis_core.scheduling import fmt, location_for, tz_for
+
+        extra["when"] = fmt(appt.starts_at, tz_for(tenant, location_for(session, tenant)))
+    else:
+        if conv.status not in step.only_if_status:
+            return f"skipped:status={conv.status}"
+        anchor = datetime.fromisoformat(job.payload["anchor"])
+        newer = session.scalar(
+            select(Message)
+            .where(Message.conversation_id == conv.id, Message.created_at > anchor)
+            .limit(1)
+        )
+        if newer is not None:
+            return "skipped:activity"
     contact = session.get(Contact, conv.contact_id)
     if step.action == "close_conversation":
         conv.status = "closed"
@@ -122,6 +145,6 @@ def run_step(session: Session, tenant: Tenant, pack: PackSpec, job: Job) -> str:
         conversation_channel=conv.channel,
         pack_rule=pack.rule,
     )
-    text = render(step.template, conv, contact)
+    text = render(step.template, conv, contact, extra)
     p, d = propose(session, tenant, conv, "reply", {"text": text}, ctx, f"workflow:{step.id}")
     return f"{d.state}:{p.state}"

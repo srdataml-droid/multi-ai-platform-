@@ -1,7 +1,7 @@
 id: restoration
 name: Property damage restoration (water, fire, mould, storm)
 version: "0.1"
-tools: [extract_fields, propose_appointment, hand_to_human, escalate_emergency]
+tools: [extract_fields, propose_appointment, confirm_appointment, reschedule_appointment, cancel_appointment, hand_to_human, escalate_emergency]
 intake_opening: "I'm sorry you're dealing with this. Could I take your name, and tell me what's happened to the property?"
 emergency_keywords:
   - "still flooding"

@@ -38,6 +38,7 @@ from novaxis_core.models import (
 )
 from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
+from novaxis_core.scheduling import appointments_block
 from novaxis_core.sensitive import decrypt_fields
 from novaxis_core.settings import get_settings
 from novaxis_core.workflows import schedule_idle_steps
@@ -268,6 +269,9 @@ def run_turn(
         if pack.intake:
             plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
             system_volatile += "\n\n" + prompt_block(pack.intake, plain)
+        appts = appointments_block(session, tenant, conv)
+        if appts:
+            system_volatile += "\n\n" + appts
         if first_worker_reply:
             system_volatile += f"\n\nThis is your first reply. Open with: {pack.intake_opening}"
         result = llm.complete(

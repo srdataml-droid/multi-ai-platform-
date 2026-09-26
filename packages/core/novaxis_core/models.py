@@ -269,6 +269,13 @@ class Appointment(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="proposed")
     external_ref: Mapped[str | None] = mapped_column(String(200))
     hold_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL")
+    )
+    proposal_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("action_proposals.id", ondelete="SET NULL")
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created_at()
 
 

@@ -40,13 +40,9 @@ seed:          ## seed demo tenants (idempotent)
 dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
 	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
-demo:          ## Chunk 7 demo: restoration evals; an email with a photo lands stored under the tenant prefix
-	uv run python evals/run.py --pack restoration
-	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running, skipping live photo"; exit 0)
-	@PNG=$$(python3 -c 'import base64;print(base64.b64encode(b"\x89PNG\r\n\x1a\n"+b"\0"*64).decode())'); \
-	curl -s -X POST "http://localhost:8000/inbound/email/postmark?token=$${NOVAXIS_POSTMARK_INBOUND_TOKEN:-demo}" -H 'Content-Type: application/json' \
-	  -d "{\"MessageID\":\"pm-demo-$$RANDOM\",\"FromFull\":{\"Email\":\"owner@example.com\",\"Name\":\"Demo Owner\"},\"ToFull\":[{\"Email\":\"demo-restoration@inbound.novaxis.test\"}],\"Subject\":\"Burst pipe\",\"StrippedTextReply\":\"Pipe burst last night, stopped now, photo attached\",\"Attachments\":[{\"Name\":\"kitchen.png\",\"ContentType\":\"image/png\",\"Content\":\"$$PNG\"}]}"; echo; \
-	ls -R "$${NOVAXIS_STORAGE_LOCAL_DIR:-.novaxis-media}" | tail -4
+demo:          ## Chunk 8 demo: intake -> approve the proposal -> slots offered and held
+	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running: uv run uvicorn novaxis_api.main:app"; exit 1)
+	uv run python tools/demo_scheduling.py
 
 worker-once:   ## drain the job queue once and exit
 	uv run python -m novaxis_worker.main --once

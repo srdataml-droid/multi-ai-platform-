@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # Fernet key (urlsafe base64, 32 bytes) for sensitive intake fields at rest. Empty means
     # "derive from the JWT secret", which is acceptable only when env == "local".
     sensitive_fields_key: str = ""
+    # Scheduling. Google OAuth app credentials; the redirect URI is
+    # {public_base_url}/integrations/google/callback.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    hold_minutes: int = 10
+    slots_offered: int = 3
+    availability_days: int = 14
     # Media storage. "local" writes under storage_local_dir; "supabase" uses Storage REST.
     storage_backend: str = "local"
     storage_local_dir: str = ".novaxis-media"

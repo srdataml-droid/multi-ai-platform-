@@ -1,7 +1,7 @@
 id: dental
 name: Dental practice (UK)
 version: "0.1"
-tools: [extract_fields, propose_appointment, hand_to_human, escalate_emergency]
+tools: [extract_fields, propose_appointment, confirm_appointment, reschedule_appointment, cancel_appointment, hand_to_human, escalate_emergency]
 intake_opening: "Hello, thanks for getting in touch with the practice. Could I take your name, and are you an existing patient with us or new to the practice?"
 emergency_keywords:
   - "can't breathe"

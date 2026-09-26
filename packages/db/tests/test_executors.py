@@ -146,10 +146,7 @@ def test_every_executor_writes_an_audit_row(hvac: Tenant, fakes) -> None:  # typ
             }
             assert events & {"proposal.executed", "proposal.failed"}, kind
             assert state in ("executed", "failed"), kind
-            if kind == "propose_appointment":
-                assert state == "failed"
-            else:
-                assert state == "executed", kind
+            assert state == "executed", kind
 
 
 def test_escalation_alerts_every_contact_channel(hvac: Tenant, fakes) -> None:  # type: ignore[no-untyped-def]

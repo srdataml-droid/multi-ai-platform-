@@ -165,6 +165,26 @@ TOOL_DEFINITIONS: dict[str, dict[str, Any]] = {
         {"summary": {"type": "string"}},
         ["summary"],
     ),
+    "confirm_appointment": proposal_tool(
+        "confirm_appointment",
+        "The customer picked one of the offered times. Pass the appointment_id shown next to "
+        "that time in the offered slots list. Staff approve before it is booked unless the "
+        "service is set to auto-confirm.",
+        {"appointment_id": {"type": "string"}, "service_code": {"type": "string"}},
+        ["appointment_id", "service_code"],
+    ),
+    "reschedule_appointment": proposal_tool(
+        "reschedule_appointment",
+        "The customer wants a different time for a confirmed appointment.",
+        {"appointment_id": {"type": "string"}, "new_window": {"type": "string"}},
+        ["appointment_id", "new_window"],
+    ),
+    "cancel_appointment": proposal_tool(
+        "cancel_appointment",
+        "The customer wants to cancel a confirmed appointment.",
+        {"appointment_id": {"type": "string"}, "reason": {"type": "string"}},
+        ["appointment_id", "reason"],
+    ),
     "send_reminder": proposal_tool(
         "send_reminder",
         "Send a reminder about an existing appointment.",
