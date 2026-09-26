@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     app_role: str = "novaxis_app"
     # Public URL the providers call, used to recompute Twilio's signed URL behind a proxy.
     public_base_url: str = "http://localhost:8000"
+    # Where the dashboard and widget are served from (shown in the install snippet).
+    public_web_url: str = "http://localhost:3000"
     # Twilio: one Novaxis account, one number per tenant (tenant settings hold the number).
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
@@ -54,6 +56,7 @@ class Settings(BaseSettings):
     storage_bucket: str = "media"
     supabase_url: str = ""
     supabase_service_key: str = ""
+    supabase_anon_key: str = ""
     media_max_bytes: int = 10 * 1024 * 1024
     media_allowed_types: tuple[str, ...] = ("image/", "application/pdf", "video/mp4")
     # Local: Mailpit; production: unused when Postmark is configured.

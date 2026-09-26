@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals evals-real migrate migrate-new seed dev-token demo worker-once web-install
+.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -40,9 +40,15 @@ seed:          ## seed demo tenants (idempotent)
 dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
 	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
-demo:          ## Chunk 8 demo: intake -> approve the proposal -> slots offered and held
+demo:          ## Chunk 9 demo: the pilot demo in the browser. API + web must be running; then open http://localhost:3000
 	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running: uv run uvicorn novaxis_api.main:app"; exit 1)
+	@echo "1. Open http://localhost:3000 and sign in as owner@demo-hvac.test (local mode, no password)."
+	@echo "2. In another tab open the widget test page: http://localhost:3000/widget-demo.html and send a message."
+	@echo "3. Run 'make worker-once' (or leave 'novaxis-worker' running), then approve in the dashboard."
 	uv run python tools/demo_scheduling.py
+
+e2e:           ## Playwright pilot test (API must be running with NOVAXIS_LLM_PROVIDER=fake)
+	cd apps/web && NOVAXIS_REPO_ROOT=$(CURDIR) npx playwright test
 
 worker-once:   ## drain the job queue once and exit
 	uv run python -m novaxis_worker.main --once

@@ -100,17 +100,18 @@ def seed(session: Session) -> list[Tenant]:
         if session.scalar(select(Location).where(Location.tenant_id == tenant.id)) is None:
             session.add(Location(tenant_id=tenant.id, name="Main", timezone="Europe/London"))
 
-        subject = f"dev|owner@{slug}"
-        if session.scalar(select(User).where(User.auth_subject == subject)) is None:
-            session.add(
-                User(
-                    tenant_id=tenant.id,
-                    auth_subject=subject,
-                    email=f"owner@{slug}.test",
-                    role="owner",
-                    display_name="Demo Owner",
+        for role in ("owner", "viewer"):
+            subject = f"dev|{role}@{slug}"
+            if session.scalar(select(User).where(User.auth_subject == subject)) is None:
+                session.add(
+                    User(
+                        tenant_id=tenant.id,
+                        auth_subject=subject,
+                        email=f"{role}@{slug}.test",
+                        role=role,
+                        display_name=f"Demo {role.title()}",
+                    )
                 )
-            )
         out.append(tenant)
     session.flush()
     return out

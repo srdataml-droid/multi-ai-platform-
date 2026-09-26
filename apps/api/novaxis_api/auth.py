@@ -31,7 +31,8 @@ class Principal:
     email: str
 
 
-def _decode(token: str) -> str:
+def _decode(token: str) -> tuple[str, str | None]:
+    """Verify the JWT; return (subject, email-or-None)."""
     s = get_settings()
     try:
         claims = jwt.decode(token, s.jwt_secret, algorithms=["HS256"], audience=s.jwt_audience)
@@ -40,16 +41,23 @@ def _decode(token: str) -> str:
     sub = claims.get("sub")
     if not isinstance(sub, str) or not sub:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token has no subject")
-    return sub
+    email = claims.get("email")
+    return sub, (email.lower() if isinstance(email, str) else None)
 
 
 def current_principal(authorization: str | None = Header(default=None)) -> Principal:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
-    subject = _decode(authorization.split(" ", 1)[1].strip())
+    subject, email = _decode(authorization.split(" ", 1)[1].strip())
     # Cross-tenant lookup by subject: the one place a request uses the service session.
     with service_session() as s:
         user = s.scalar(select(User).where(User.auth_subject == subject))
+        if user is None and email:
+            # First login of a user an owner pre-registered by email: bind the subject.
+            user = s.scalar(select(User).where(User.auth_subject == f"email|{email}"))
+            if user is not None:
+                user.auth_subject = subject
+                s.flush()
         if user is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "no user for this identity")
         return Principal(

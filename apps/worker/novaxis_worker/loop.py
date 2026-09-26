@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.llm import LLMClient
 from novaxis_core.media import fetch_media
+from novaxis_core.metrics import ROLLUP_KIND, enqueue_rollups, rollup_recent
 from novaxis_core.models import AuditLog, Conversation, Job, Tenant
 from novaxis_core.notify import notify_staff
 from novaxis_core.outbound import send_message
@@ -107,12 +108,17 @@ def _handle_workflow_step(pack_for: Callable[[str], PackSpec]) -> Handler:
     return handler
 
 
+def _handle_rollup(session: Session, tenant: Tenant, job: Job) -> None:
+    rollup_recent(session, tenant)
+
+
 def _handle_fetch_media(session: Session, tenant: Tenant, job: Job) -> None:
     fetch_media(session, tenant, uuid.UUID(job.payload["message_id"]))
 
 
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
+        ROLLUP_KIND: _handle_rollup,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
@@ -177,6 +183,22 @@ def run_job(picked: Picked, handlers: dict[str, Handler]) -> bool:
             return False
 
 
+_last_periodic: datetime | None = None
+
+
+def periodic(session: Session) -> None:
+    """Things that happen on a timer rather than on a message: metrics roll-ups."""
+    global _last_periodic
+    now = datetime.now(UTC)
+    if _last_periodic and now - _last_periodic < timedelta(minutes=5):
+        return
+    _last_periodic = now
+    ids = [
+        t.id for t in session.scalars(select(Tenant).where(Tenant.status.in_(["active", "trial"])))
+    ]
+    enqueue_rollups(session, ids)
+
+
 def tick(handlers: dict[str, Handler], worker_id: str) -> bool:
     """One pass: reclaim stale leases, pick one job, run it. Returns True if a job ran."""
     s = get_settings()
@@ -184,6 +206,8 @@ def tick(handlers: dict[str, Handler], worker_id: str) -> bool:
         return False
     with service_session() as session:
         reclaim_stale(session, s.worker_lease_seconds)
+        if ROLLUP_KIND in handlers:
+            periodic(session)
         picked = pick_one(session, worker_id)
     if picked is None:
         return False

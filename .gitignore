@@ -13,3 +13,5 @@ dist/
 .pytest_cache/
 apps/web/next-env.d.ts
 .novaxis-media/
+apps/web/test-results/
+apps/web/playwright-report/

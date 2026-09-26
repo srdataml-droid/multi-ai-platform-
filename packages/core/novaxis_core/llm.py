@@ -227,5 +227,23 @@ class FakeLLM:
 def build_llm() -> LLMClient:
     s = get_settings()
     if s.llm_provider == "fake":
-        return FakeLLM()
+        return FakeLLM(script=script_from_env())
     return AnthropicLLM()
+
+
+def script_from_env() -> list[tuple[str, list[ToolCall]]]:
+    """NOVAXIS_FAKE_SCRIPT: JSON list of {"text": ..., "calls": [{"tool": ..., "input": {...}}]}.
+    Lets demos and end-to-end tests drive the worker without a model. Consumed per process."""
+    import os
+
+    raw = os.environ.get("NOVAXIS_FAKE_SCRIPT", "").strip()
+    if not raw:
+        return []
+    out: list[tuple[str, list[ToolCall]]] = []
+    for i, turn in enumerate(json.loads(raw)):
+        calls = [
+            ToolCall(c["tool"], c.get("input", {}), f"env{i}-{j}")
+            for j, c in enumerate(turn.get("calls") or [])
+        ]
+        out.append((str(turn.get("text", "")), calls))
+    return out

@@ -67,7 +67,7 @@ def test_worker_turn_job_runs_end_to_end(hvac: Tenant) -> None:
     handlers = build_handlers(
         get_pack, FakeLLM(default_text="Sorry to hear that, what's your postcode?")
     )
-    assert drain(handlers, "w1") == 1
+    assert drain(handlers, "w1") >= 1  # the turn, plus any roll-ups the timer enqueued
     with tenant_session(hvac.id) as s:
         job = s.get(Job, job_id)
         assert job is not None and job.state == "done" and job.locked_by is None

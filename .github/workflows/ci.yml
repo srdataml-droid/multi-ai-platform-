@@ -49,3 +49,50 @@ jobs:
       - run: npm run typecheck
       - run: node --test --experimental-strip-types app/*.test.ts
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: novaxis
+          POSTGRES_PASSWORD: novaxis
+          POSTGRES_DB: novaxis
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U novaxis"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NOVAXIS_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@localhost:5432/novaxis
+      NOVAXIS_LLM_PROVIDER: fake
+      NOVAXIS_ENV: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: uv sync --all-packages --frozen
+      - run: uv run alembic -c packages/db/alembic.ini upgrade head
+      - run: uv run python -m novaxis_db.seed
+      - run: (uv run uvicorn novaxis_api.main:app --port 8000 > api.log 2>&1 &) && sleep 3 && curl -sf localhost:8000/health
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npx playwright test
+        working-directory: apps/web
+        env:
+          NOVAXIS_REPO_ROOT: ${{ github.workspace }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/test-results
