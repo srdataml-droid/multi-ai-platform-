@@ -1,0 +1,5 @@
+inbox_columns:
+  - {key: name, label: Name}
+  - {key: need, label: Need}
+work_queue_buckets: [new, urgent, waiting, human_review, done]
+labels: {}

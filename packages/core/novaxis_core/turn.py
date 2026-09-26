@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
+from novaxis_core.intake import out_of_area, prompt_block
+from novaxis_core.intake import status as intake_status
 from novaxis_core.llm import LLMClient, LLMResult, ToolCall
 from novaxis_core.models import (
     ActionProposal,
@@ -37,6 +39,7 @@ from novaxis_core.models import (
 from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
 from novaxis_core.settings import get_settings
+from novaxis_core.workflows import schedule_idle_steps
 
 # Phrases that claim a side effect happened. If the model says one without the
 # matching tool call, a human verifies before the customer relies on it.
@@ -173,7 +176,32 @@ def propose(
 
 def _emergency_hit(pack: PackSpec, text: str) -> bool:
     low = text.lower()
-    return any(k in low for k in pack.emergency_keywords)
+    if any(k in low for k in pack.emergency_keywords):
+        return True
+    return bool(pack.emergency_check and pack.emergency_check(text))
+
+
+def _service_code(pack: PackSpec, extracted: dict[str, Any]) -> str:
+    ai = pack.after_intake
+    if ai.service_code_from:
+        value = str(extracted.get(ai.service_code_from, "")).strip().lower()
+        for k, v in ai.service_code_map.items():
+            if k.lower() == value:
+                return v
+    return ai.default_service_code
+
+
+def _has_proposal(session: Session, conv: Conversation, kind: str) -> bool:
+    return (
+        session.scalar(
+            select(ActionProposal.id).where(
+                ActionProposal.conversation_id == conv.id,
+                ActionProposal.kind == kind,
+                ActionProposal.state.notin_(["rejected", "failed"]),
+            )
+        )
+        is not None
+    )
 
 
 def run_turn(
@@ -236,6 +264,8 @@ def run_turn(
         system_volatile = tenant_facts(tenant)
         if conv.summary:
             system_volatile += f"\n\nSummary of the conversation so far:\n{conv.summary}"
+        if pack.intake:
+            system_volatile += "\n\n" + prompt_block(pack.intake, conv.extracted)
         if first_worker_reply:
             system_volatile += f"\n\nThis is your first reply. Open with: {pack.intake_opening}"
         result = llm.complete(
@@ -256,6 +286,44 @@ def run_turn(
             decisions[call.name] = d.state
             if d.state == "rejected":
                 followup_needed = True
+        session.refresh(conv)
+        st = intake_status(pack.intake, conv.extracted) if pack.intake else None
+        area_value = (
+            conv.extracted.get(pack.service_area_field) if pack.service_area_field else None
+        )
+        if area_value and out_of_area(str(area_value), tenant.settings.get("service_area") or []):
+            reply_text = pack.out_of_area_reply or reply_text
+            if not _has_proposal(session, conv, "hand_to_human"):
+                p, d = propose(
+                    session,
+                    tenant,
+                    conv,
+                    "hand_to_human",
+                    {"reason": f"outside service area: {area_value}"},
+                    ctx,
+                    "service area",
+                )
+                result_ids.append(p.id)
+                decisions["hand_to_human"] = d.state
+        elif (
+            st is not None
+            and st.complete
+            and pack.after_intake.action == "propose_appointment"
+            and "propose_appointment" not in {c.name for c in tool_calls}
+            and not _has_proposal(session, conv, "propose_appointment")
+        ):
+            # The model finished intake but did not propose; the engine does it for it.
+            params = {
+                "service_code": _service_code(pack, conv.extracted),
+                "preferred_window": str(conv.extracted.get(pack.after_intake.window_from, "")),
+                "notes": "proposed by intake engine",
+            }
+            p, d = propose(
+                session, tenant, conv, "propose_appointment", params, ctx, "intake complete"
+            )
+            result_ids.append(p.id)
+            decisions["propose_appointment"] = d.state
+            tool_calls = [*tool_calls, ToolCall("propose_appointment", params, "engine")]
         if BOOKING_CLAIMS.search(reply_text) and not {c.name for c in tool_calls} & CLAIM_TOOLS:
             p, d = propose(
                 session,
@@ -297,6 +365,8 @@ def run_turn(
     conv.updated_at = datetime.now(UTC)
     if conv.status == "open":
         conv.status = "waiting_customer"
+    if reply_message_id and conv.status == "waiting_customer" and pack.workflows:
+        schedule_idle_steps(session, tenant, pack, conv)
 
     total = len(history) + 1
     if reply_message_id and total % settings.summary_every_messages == 0 and not emergency:

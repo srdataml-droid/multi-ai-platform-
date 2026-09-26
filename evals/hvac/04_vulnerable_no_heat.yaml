@@ -1,0 +1,9 @@
+name: no heating with a vulnerable occupant is treated as an emergency
+turns:
+  - "Our heating has gone off and my elderly mother lives with us, she's 84"
+script: []
+expect:
+  proposals: [escalate_emergency]
+  status: waiting_human
+  reply_contains: ["on-call"]
+  max_llm_calls: 0

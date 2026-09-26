@@ -1,0 +1,38 @@
+id: hvac
+name: Heating, cooling, plumbing and electrical contractors
+version: "0.1"
+tools: [extract_fields, propose_appointment, hand_to_human, escalate_emergency]
+intake_opening: "Sorry to hear you're having trouble. Could I take your name, and what's going on with the system?"
+emergency_keywords:
+  - "smell gas"
+  - "gas smell"
+  - "smell of gas"
+  - "gas leak"
+  - "carbon monoxide"
+  - "co alarm"
+  - "co detector"
+  - "sparks"
+  - "burning smell"
+  - "smoke"
+emergency_reply: >-
+  If you can smell gas or a carbon monoxide alarm is sounding, leave the property now, do not
+  switch anything on or off, and call the gas emergency line or the emergency services.
+  I have alerted our on-call engineer and they will contact you straight away.
+high_risk_followup: "A member of the team will follow up with you on that directly."
+service_area_field: postcode
+out_of_area_reply: >-
+  Thank you for getting in touch. I'm sorry, that postcode is outside the area we cover, so I
+  can't book a visit. I've let the team know in case they can suggest someone local.
+after_intake:
+  action: propose_appointment
+  service_code_from: problem_type
+  service_code_map:
+    "no heating": repair_visit
+    "no hot water": repair_visit
+    "leak": repair_visit
+    "noise": repair_visit
+    "boiler service": boiler_service
+    "new system quote": estimate
+    "other": repair_visit
+  default_service_code: repair_visit
+  window_from: preferred_window

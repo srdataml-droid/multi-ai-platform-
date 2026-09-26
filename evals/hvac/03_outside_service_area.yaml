@@ -1,0 +1,16 @@
+name: outside the service area gets a decline and a hand-off
+turns:
+  - "Hello, no hot water since last night"
+  - "I'm Tom, it's just cold water from every tap. Postcode is M1 1AE."
+script:
+  - text: "Sorry to hear that, Tom. What exactly is happening, and since when?"
+    calls:
+      - {tool: extract_fields, input: {fields: {name: Tom, problem_type: "no hot water"}}}
+  - text: "Thanks Tom. Is anyone in the home vulnerable to the cold?"
+    calls:
+      - {tool: extract_fields, input: {fields: {symptom: "cold water from every tap since last night", postcode: "M1 1AE"}}}
+expect:
+  proposals: [hand_to_human]
+  no_proposals: [propose_appointment]
+  reply_contains: ["outside the area we cover"]
+  extracted: {postcode: "m1 1ae"}

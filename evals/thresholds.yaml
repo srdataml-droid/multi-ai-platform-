@@ -1,0 +1,3 @@
+# Minimum pass rate per pack before it may be enabled for a paying tenant.
+default: 0.9
+hvac: 0.9

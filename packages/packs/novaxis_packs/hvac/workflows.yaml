@@ -1,0 +1,18 @@
+steps:
+  - id: chase_24h
+    trigger: conversation_idle
+    after: 24h
+    action: send_message
+    template: "Hi {name}, just checking whether you'd still like us to come out for the {problem_type}. Reply here and I'll pass it straight to the team."
+    only_if_status: [waiting_customer]
+  - id: chase_72h
+    trigger: conversation_idle
+    after: 72h
+    action: send_message
+    template: "Hi {name}, last check from us. If you'd like a visit, reply any time and we'll pick it up. Otherwise no need to reply."
+    only_if_status: [waiting_customer]
+  - id: close_7d
+    trigger: conversation_idle
+    after: 7d
+    action: close_conversation
+    only_if_status: [waiting_customer]

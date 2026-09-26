@@ -24,9 +24,14 @@ State = Literal["auto_approved", "awaiting", "rejected"]
 
 # Words that mean a person must look before anything else happens. Matched on the
 # customer's latest message and on the proposal's own text.
+_CHILD = r"(son|daughter|child|children|kid|kids|boy|girl|baby|toddler|teen\w*)"
 SAFEGUARDING = re.compile(
-    r"\b((my|your|our|the|his|her) (son|daughter|child|kid|children|kids)|"
-    r"under (16|18)|minor|years? old|"
+    r"\b((my|your|our|the|his|her) " + _CHILD + r"|"
+    r"under (16|18)|minor|"
+    # An age counts only next to a child word: "my boy, 8 years old" yes,
+    # "boiler is 8 years old" no.
+    r"\b" + _CHILD + r"\b[^.!?]{0,40}\b\d{1,2}\s*(years?|yrs?) old|"
+    r"\b\d{1,2}\s*(years?|yrs?) old\b[^.!?]{0,20}\b" + _CHILD + r"|"
     r"kill (myself|him|her|them|you)|suicid\w*|self[- ]harm|hurt (myself|someone)|"
     r"threat\w*|weapon|gun|knife|abuse\w*|assault\w*)\b",
     re.IGNORECASE,

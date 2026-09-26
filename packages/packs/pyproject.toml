@@ -11,3 +11,4 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["novaxis_packs"]
+include = ["novaxis_packs/**/*.yaml", "novaxis_packs/**/*.md", "novaxis_packs/**/*.py"]

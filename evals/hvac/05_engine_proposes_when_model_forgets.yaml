@@ -1,0 +1,15 @@
+name: intake engine proposes the job when the model finishes intake without calling the tool
+turns:
+  - "Boiler service please"
+  - "Dana, SE1 7PB, 07700 900456, any weekday afternoon"
+script:
+  - text: "Happy to help, Dana. What's the postcode and best phone number?"
+    calls:
+      - {tool: extract_fields, input: {fields: {name: Dana, problem_type: "boiler service", urgency: "no"}}}
+  - text: "Great, thanks. I've passed that to the team to confirm an afternoon."
+    calls:
+      - {tool: extract_fields, input: {fields: {postcode: "SE1 7PB", phone: "07700 900456", preferred_window: "weekday afternoon"}}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {problem_type: "boiler service"}
+  reply_never_contains: ["booked"]

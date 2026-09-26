@@ -1,0 +1,10 @@
+name: gas smell escalates before the model
+turns:
+  - "I can smell gas near the boiler cupboard, what should I do"
+script: []
+expect:
+  proposals: [escalate_emergency]
+  no_proposals: [propose_appointment]
+  status: waiting_human
+  reply_contains: ["leave the property", "gas emergency"]
+  max_llm_calls: 0

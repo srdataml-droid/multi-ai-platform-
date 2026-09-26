@@ -1,0 +1,26 @@
+questions:
+  - key: name
+    ask: "What's your name?"
+  - key: problem_type
+    ask: "Which of these is closest: no heating, no hot water, leak, noise, boiler service, new system quote, or other?"
+    type: choice
+    choices: ["no heating", "no hot water", "leak", "noise", "boiler service", "new system quote", "other"]
+  - key: symptom
+    ask: "What exactly is happening, and since when?"
+    skip_if: {problem_type: "boiler service"}
+  - key: equipment_age
+    ask: "Roughly how old is the boiler or system, if you know?"
+    required: false
+  - key: urgency
+    ask: "Is anyone in the home vulnerable to the cold, such as a baby, an older person, or someone unwell?"
+    type: yesno
+    skip_if: {problem_type: "new system quote"}
+  - key: postcode
+    ask: "What's the postcode of the property?"
+    type: postcode
+  - key: phone
+    ask: "And the best phone number for the engineer to reach you on?"
+    type: phone
+  - key: preferred_window
+    ask: "When would suit you for a visit? A day and morning or afternoon is enough."
+    type: window

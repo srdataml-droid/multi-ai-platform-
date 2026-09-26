@@ -26,6 +26,7 @@ from novaxis_core.outbound import send_message
 from novaxis_core.packspec import PackSpec
 from novaxis_core.settings import get_settings
 from novaxis_core.turn import run_turn
+from novaxis_core.workflows import run_step
 from novaxis_db.session import service_session, tenant_session
 
 log = logging.getLogger("novaxis.worker")
@@ -97,11 +98,20 @@ def _handle_notify_staff(session: Session, tenant: Tenant, job: Job) -> None:
     notify_staff(session, tenant, uuid.UUID(job.payload["proposal_id"]))
 
 
+def _handle_workflow_step(pack_for: Callable[[str], PackSpec]) -> Handler:
+    def handler(session: Session, tenant: Tenant, job: Job) -> None:
+        outcome = run_step(session, tenant, pack_for(tenant.pack_id), job)
+        job.last_error = outcome  # the outcome word is useful in the job log
+
+    return handler
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
         "notify_staff": _handle_notify_staff,
+        "workflow_step": _handle_workflow_step(pack_for),
     }
 
 

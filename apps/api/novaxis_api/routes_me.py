@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.models import Tenant
+from novaxis_packs import get_pack
 
 router = APIRouter()
 
@@ -23,4 +24,21 @@ def me(principal: CurrentPrincipal, session: TenantDb) -> dict[str, object]:
         "tenant": None
         if tenant is None
         else {"id": str(tenant.id), "slug": tenant.slug, "pack_id": tenant.pack_id},
+    }
+
+
+@router.get("/pack")
+def pack(principal: CurrentPrincipal, session: TenantDb) -> dict[str, object]:
+    """The tenant's pack as the dashboard needs it: labels, columns, intake keys."""
+    tenant = session.scalar(select(Tenant).where(Tenant.id == principal.tenant_id))
+    if tenant is None:
+        return {}
+    p = get_pack(tenant.pack_id)
+    return {
+        "id": p.id,
+        "name": p.name,
+        "vocabulary": p.vocabulary,
+        "dashboard": p.dashboard.model_dump(),
+        "intake": [q.model_dump() for q in p.intake],
+        "workflows": [w.model_dump() for w in p.workflows],
     }

@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals migrate migrate-new seed dev-token demo worker-once web-install
+.PHONY: up down test test-docker lint typecheck evals evals-real migrate migrate-new seed dev-token demo worker-once web-install
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -22,8 +22,11 @@ typecheck:     ## mypy strict on core + tsc on web
 	uv run mypy
 	cd apps/web && npm run typecheck
 
-evals:         ## Golden-conversation evals (Chunk 5 onward)
-	@echo "no evals yet; arrives with the first pack (Chunk 5)"
+evals:         ## Golden-conversation evals with the scripted model (deterministic)
+	uv run python evals/run.py
+
+evals-real:    ## Same evals against the real model (needs ANTHROPIC_API_KEY)
+	uv run python evals/run.py --real
 
 migrate:       ## alembic upgrade head
 	uv run alembic -c packages/db/alembic.ini upgrade head
@@ -37,15 +40,14 @@ seed:          ## seed demo tenants (idempotent)
 dev-token:     ## mint a local JWT: make dev-token u=owner@demo-hvac
 	uv run python -m novaxis_api.devtoken $(or $(u),owner@demo-hvac)
 
-demo:          ## Chunk 4 demo: "I smell gas" escalates without the model; approvals queue via API
-	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running: make up (or uv run uvicorn novaxis_api.main:app)"; exit 1)
+demo:          ## Chunk 5 demo: HVAC evals pass with the scripted model; then one real intake turn
+	uv run python evals/run.py --pack hvac
+	@curl -sf http://localhost:8000/health >/dev/null || (echo "API not running, skipping live turn"; exit 0)
 	@R=$$(curl -s -X POST http://localhost:8000/inbound/webchat/demo-hvac -H 'Content-Type: application/json' \
-	  -d '{"body":"I smell gas in the kitchen and the boiler is hissing"}'); echo "$$R"; \
+	  -d '{"body":"Hi, no heating since this morning"}'); \
 	T=$$(echo "$$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["visitor_token"])'); \
 	uv run python -m novaxis_worker.main --once; \
-	curl -s "http://localhost:8000/inbound/webchat/demo-hvac/messages?visitor_token=$$T" | python3 -m json.tool; \
-	TOK=$$(uv run python -m novaxis_api.devtoken owner@demo-hvac); \
-	echo "--- approvals awaiting ---"; curl -s http://localhost:8000/approvals -H "Authorization: Bearer $$TOK" | python3 -m json.tool
+	curl -s "http://localhost:8000/inbound/webchat/demo-hvac/messages?visitor_token=$$T" | python3 -m json.tool
 
 worker-once:   ## drain the job queue once and exit
 	uv run python -m novaxis_worker.main --once

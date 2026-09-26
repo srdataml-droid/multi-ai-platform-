@@ -1,0 +1,22 @@
+name: full intake ends in a proposed job
+turns:
+  - "Hi, my boiler has stopped working, no heating since this morning"
+  - "I'm Priya. It's making a clicking noise then nothing, started about 7am. Boiler is maybe 8 years old."
+  - "No, nobody vulnerable. Postcode SW1A 1AA, phone 07700 900123. Tomorrow morning would be great."
+script:
+  - text: "Sorry to hear that, Priya. What exactly is happening, and since when?"
+    calls:
+      - {tool: extract_fields, input: {fields: {name: Priya, problem_type: "no heating"}}}
+  - text: "Thanks. Is anyone in the home vulnerable to the cold? And what's the postcode and best phone number?"
+    calls:
+      - {tool: extract_fields, input: {fields: {symptom: "clicking then nothing since 7am", equipment_age: "8 years"}}}
+  - text: "Thanks Priya, I've passed this to the team to confirm a time for tomorrow morning."
+    calls:
+      - {tool: extract_fields, input: {fields: {urgency: "no", postcode: "SW1A 1AA", phone: "07700 900123", preferred_window: "tomorrow morning"}}}
+      - {tool: propose_appointment, input: {service_code: repair_visit, preferred_window: "tomorrow morning", notes: "clicking then nothing"}}
+expect:
+  proposals: [propose_appointment]
+  extracted: {name: priya, problem_type: "no heating", postcode: "sw1a 1aa"}
+  reply_contains: ["passed this to the team"]
+  reply_never_contains: ["booked"]
+  max_llm_calls: 3

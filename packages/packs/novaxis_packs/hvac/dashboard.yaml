@@ -1,0 +1,11 @@
+inbox_columns:
+  - {key: name, label: Customer}
+  - {key: problem_type, label: Problem}
+  - {key: postcode, label: Postcode}
+  - {key: urgency, label: Vulnerable occupant}
+  - {key: preferred_window, label: Preferred window}
+work_queue_buckets: [emergencies, unassigned_jobs, estimates, waiting, human_review, done]
+labels:
+  appointment: Job
+  provider: Engineer
+  contact: Customer

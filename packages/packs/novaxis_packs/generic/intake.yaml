@@ -1,0 +1,8 @@
+questions:
+  - key: name
+    ask: "What's your name?"
+  - key: need
+    ask: "What do you need help with?"
+  - key: preferred_window
+    ask: "When would suit you for a visit? A day and morning or afternoon is enough."
+    type: window
