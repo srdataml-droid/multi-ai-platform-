@@ -21,9 +21,18 @@ def me(principal: CurrentPrincipal, session: TenantDb) -> dict[str, object]:
         "user_id": str(principal.user_id),
         "email": principal.email,
         "role": principal.role,
+        "acting": principal.acting,
         "tenant": None
         if tenant is None
-        else {"id": str(tenant.id), "slug": tenant.slug, "pack_id": tenant.pack_id},
+        else {
+            "id": str(tenant.id),
+            "slug": tenant.slug,
+            "name": tenant.name,
+            "pack_id": tenant.pack_id,
+            "status": tenant.status,
+            "plan": tenant.plan,
+            "onboarded": tenant.onboarded_at is not None,
+        },
     }
 
 

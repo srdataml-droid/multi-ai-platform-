@@ -33,3 +33,8 @@ after_intake:
     "other": checkup
   default_service_code: checkup
   window_from: preferred_window
+default_services:
+  - {code: checkup, name: Check-up, duration_minutes: 20}
+  - {code: hygiene, name: Hygienist, duration_minutes: 30}
+  - {code: emergency, name: Emergency appointment, duration_minutes: 30}
+default_service_area: []

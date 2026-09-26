@@ -14,10 +14,11 @@ import jwt
 from novaxis_core.settings import get_settings
 
 
-def mint(subject: str, ttl_seconds: int = 8 * 3600) -> str:
+def mint(subject: str, ttl_seconds: int = 8 * 3600, **extra: str) -> str:
     s = get_settings()
     now = int(time.time())
     claims = {"sub": subject, "aud": s.jwt_audience, "iat": now, "exp": now + ttl_seconds}
+    claims.update(extra)
     return jwt.encode(claims, s.jwt_secret, algorithm="HS256")
 
 

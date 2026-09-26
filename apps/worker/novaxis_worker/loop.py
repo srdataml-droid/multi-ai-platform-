@@ -14,11 +14,18 @@ import socket
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
+from novaxis_core.billing import (
+    REPORT_USAGE_KIND,
+    StripeClient,
+    enqueue_usage_reports,
+    report_daily_usage,
+    trial_block_reason,
+)
 from novaxis_core.llm import LLMClient
 from novaxis_core.media import fetch_media
 from novaxis_core.metrics import ROLLUP_KIND, enqueue_rollups, rollup_recent
@@ -87,7 +94,8 @@ def pick_one(session: Session, worker_id: str) -> Picked | None:
 def _handle_worker_turn(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> Handler:
     def handler(session: Session, tenant: Tenant, job: Job) -> None:
         conv_id = uuid.UUID(job.payload["conversation_id"])
-        run_turn(session, tenant, pack_for(tenant.pack_id), llm, conv_id)
+        blocked = trial_block_reason(session, tenant, datetime.now(UTC))
+        run_turn(session, tenant, pack_for(tenant.pack_id), llm, conv_id, blocked_reason=blocked)
 
     return handler
 
@@ -102,6 +110,10 @@ def _handle_notify_staff(session: Session, tenant: Tenant, job: Job) -> None:
 
 def _handle_workflow_step(pack_for: Callable[[str], PackSpec]) -> Handler:
     def handler(session: Session, tenant: Tenant, job: Job) -> None:
+        blocked = trial_block_reason(session, tenant, datetime.now(UTC))
+        if blocked:
+            job.last_error = f"skipped: {blocked}"
+            return
         outcome = run_step(session, tenant, pack_for(tenant.pack_id), job)
         job.last_error = outcome  # the outcome word is useful in the job log
 
@@ -116,9 +128,15 @@ def _handle_fetch_media(session: Session, tenant: Tenant, job: Job) -> None:
     fetch_media(session, tenant, uuid.UUID(job.payload["message_id"]))
 
 
+def _handle_report_usage(session: Session, tenant: Tenant, job: Job) -> None:
+    n = report_daily_usage(session, tenant, StripeClient(), date.fromisoformat(job.payload["day"]))
+    job.last_error = f"reported {n}"
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
         ROLLUP_KIND: _handle_rollup,
+        REPORT_USAGE_KIND: _handle_report_usage,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
@@ -194,9 +212,13 @@ def periodic(session: Session) -> None:
         return
     _last_periodic = now
     ids = [
-        t.id for t in session.scalars(select(Tenant).where(Tenant.status.in_(["active", "trial"])))
+        t.id
+        for t in session.scalars(
+            select(Tenant).where(Tenant.status.in_(["active", "trial"]), Tenant.plan != "internal")
+        )
     ]
     enqueue_rollups(session, ids)
+    enqueue_usage_reports(session, now)
 
 
 def tick(handlers: dict[str, Handler], worker_id: str) -> bool:

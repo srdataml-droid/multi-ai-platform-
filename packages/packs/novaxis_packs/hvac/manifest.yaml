@@ -36,3 +36,8 @@ after_intake:
     "other": repair_visit
   default_service_code: repair_visit
   window_from: preferred_window
+default_services:
+  - {code: repair_visit, name: Repair visit, duration_minutes: 90}
+  - {code: boiler_service, name: Annual boiler service, duration_minutes: 60}
+  - {code: estimate, name: Estimate visit, duration_minutes: 45}
+default_service_area: [SW1, SW2, SW3, SE1]

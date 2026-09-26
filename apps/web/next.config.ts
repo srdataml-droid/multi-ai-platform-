@@ -7,6 +7,8 @@ const apiBase = process.env.NOVAXIS_API_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // The dev badge sits over the menu's "Sign out" link.
+  devIndicators: false,
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiBase}/:path*` }];
   },

@@ -41,3 +41,7 @@ after_intake:
     "no": inspection
   default_service_code: inspection
   window_from: preferred_window
+default_services:
+  - {code: inspection, name: Damage inspection, duration_minutes: 60}
+  - {code: emergency_mitigation, name: Emergency mitigation, duration_minutes: 120}
+default_service_area: [SW, SE, W, E, N, NW, EC, WC]

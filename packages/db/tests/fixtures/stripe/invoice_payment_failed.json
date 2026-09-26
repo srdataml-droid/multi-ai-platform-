@@ -1,0 +1,15 @@
+{
+  "id": "evt_1PzInvoiceFailedFixture",
+  "object": "event",
+  "type": "invoice.payment_failed",
+  "livemode": false,
+  "data": {
+    "object": {
+      "id": "in_fixture_failed",
+      "object": "invoice",
+      "customer": "cus_Fixture123",
+      "attempt_count": 1,
+      "status": "open"
+    }
+  }
+}

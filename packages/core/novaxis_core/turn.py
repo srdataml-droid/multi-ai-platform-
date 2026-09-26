@@ -207,8 +207,16 @@ def _has_proposal(session: Session, conv: Conversation, kind: str) -> bool:
 
 
 def run_turn(
-    session: Session, tenant: Tenant, pack: PackSpec, llm: LLMClient, conversation_id: uuid.UUID
+    session: Session,
+    tenant: Tenant,
+    pack: PackSpec,
+    llm: LLMClient,
+    conversation_id: uuid.UUID,
+    blocked_reason: str | None = None,
 ) -> TurnResult:
+    """One worker turn. `blocked_reason` (a spent trial, see billing.py) stops the model and
+    hands the conversation to a person; the emergency pre-check still runs, because it needs
+    no model and a customer reporting a gas leak must never get silence."""
     settings = get_settings()
     conv = session.get(Conversation, conversation_id)
     if conv is None:
@@ -244,6 +252,17 @@ def run_turn(
     decisions: dict[str, str] = {}
     emergency = bool(last_inbound and _emergency_hit(pack, last_inbound.body))
     tool_calls: list[ToolCall] = []
+
+    if blocked_reason and not emergency:
+        conv.status = "waiting_human"
+        _audit(
+            session,
+            tenant.id,
+            "billing.worker_blocked",
+            conversation_id=conv.id,
+            reason=blocked_reason,
+        )
+        return TurnResult(conv.id, None, skipped_reason=blocked_reason)
 
     if emergency:
         # Keyword pre-check: no model in the loop for the dangerous branch.

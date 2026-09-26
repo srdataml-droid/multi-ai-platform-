@@ -8,7 +8,8 @@ import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import ProgrammingError
 
-from novaxis_core.models import TENANT_TABLES, Contact, Tenant
+from novaxis_core.models import SERVICE_ONLY_TABLES, TENANT_TABLES, Contact, Tenant
+from novaxis_core.settings import get_settings
 from novaxis_db.session import service_session, tenant_session
 
 
@@ -77,9 +78,23 @@ def test_every_tenant_table_has_forced_rls_and_a_policy(migrated: str) -> None:
             )
         ).all()
     by_name = {r[0]: r for r in rows}
-    assert set(by_name) == set(TENANT_TABLES) | {"tenants"}
+    assert set(by_name) == set(TENANT_TABLES) | {"tenants"} | set(SERVICE_ONLY_TABLES)
     for name, enabled, forced, policies in rows:
-        assert enabled and forced and policies >= 1, name
+        assert enabled and forced, name
+        if name not in SERVICE_ONLY_TABLES:
+            assert policies >= 1, name
+
+
+def test_service_only_tables_are_closed_to_the_app_role(migrated: str) -> None:
+    role = get_settings().app_role
+    with service_session(migrated) as s:
+        for table in SERVICE_ONLY_TABLES:
+            for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                allowed = s.scalar(
+                    text("select has_table_privilege(:r, :t, :p)"),
+                    {"r": role, "t": table, "p": priv},
+                )
+                assert not allowed, f"{role} has {priv} on {table}"
 
 
 def test_migration_table_list_matches_models(migrated: str) -> None:

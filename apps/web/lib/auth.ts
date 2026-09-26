@@ -21,6 +21,32 @@ export function setToken(token: string | null): void {
   }
 }
 
+// While an operator is inside a customer's tenant, their own token waits here so
+// "Exit" can return them to the console without signing in again.
+const OPERATOR_KEY = "novaxis:operator-token";
+
+export function enterTenant(tenantToken: string): void {
+  const own = getToken();
+  try {
+    if (own) localStorage.setItem(OPERATOR_KEY, own);
+  } catch {
+    /* storage unavailable */
+  }
+  setToken(tenantToken);
+}
+
+export function exitTenant(): boolean {
+  let own: string | null = null;
+  try {
+    own = localStorage.getItem(OPERATOR_KEY);
+    localStorage.removeItem(OPERATOR_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  setToken(own);
+  return own !== null;
+}
+
 export type AuthConfig = { mode: "dev" | "demo" | "supabase" | "none"; supabase_url: string; supabase_anon_key: string };
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {

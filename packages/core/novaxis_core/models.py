@@ -89,6 +89,11 @@ class Tenant(Base):
         Boolean, nullable=False, server_default=text("true")
     )
     data_region: Mapped[str] = mapped_column(String(10), nullable=False, server_default="uk")
+    # Billing and onboarding (Chunk 10). Trial ends by date or by message cap, whichever first.
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    billing_customer_ref: Mapped[str | None] = mapped_column(String(200), unique=True)
+    billing_subscription_ref: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = _created_at()
 
 
@@ -341,6 +346,24 @@ class UsageEvent(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class BillingEvent(Base):
+    """One billing webhook delivery, keyed by the provider's event id. Service-only: the app
+    role has no privileges on it. A replayed delivery finds its row and does nothing."""
+
+    __tablename__ = "billing_events"
+    id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    type: Mapped[str] = mapped_column(String(80), nullable=False)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT")
+    )
+    outcome: Mapped[str] = mapped_column(String(200), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    received_at: Mapped[datetime] = _created_at()
+
+
 # Tables that carry tenant_id and therefore get an RLS policy. The migration and
 # the RLS test both iterate this list, so a new table cannot be forgotten.
 TENANT_TABLES: tuple[str, ...] = (
@@ -360,3 +383,7 @@ TENANT_TABLES: tuple[str, ...] = (
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")
+
+# Tables the app role may not touch at all: RLS forced, no policy, no grant. Only the
+# service session (webhooks, operator tooling) reads and writes them.
+SERVICE_ONLY_TABLES: tuple[str, ...] = ("billing_events",)

@@ -10,3 +10,6 @@ emergency_reply: >-
 after_intake:
   action: propose_appointment
   default_service_code: general
+default_services:
+  - {code: general, name: General appointment, duration_minutes: 60}
+default_service_area: []

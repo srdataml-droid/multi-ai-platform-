@@ -125,6 +125,17 @@ def load_pack(folder: Path) -> PackSpec:
             f"{ai.service_code_from!r} is not an intake key"
         )
 
+    if manifest.default_services:
+        codes = {sv.code for sv in manifest.default_services}
+        wanted = set(ai.service_code_map.values()) | (
+            {ai.default_service_code} if ai.default_service_code else set()
+        )
+        if wanted - codes:
+            raise PackError(
+                "manifest.yaml: after_intake refers to service codes not in default_services: "
+                f"{sorted(wanted - codes)}"
+            )
+
     rule, emergency_check = _load_rules(folder)
     tools = [TOOL_DEFINITIONS[t] for t in manifest.tools if t in TOOL_DEFINITIONS]
     missing = [t for t in manifest.tools if t not in TOOL_DEFINITIONS]

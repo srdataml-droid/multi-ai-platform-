@@ -15,6 +15,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from novaxis_core.actions import ACTIONS
+from novaxis_core.tenant_settings import Service
 
 PackRule = Callable[[str, dict[str, Any], Any], str | None]
 EmergencyCheck = Callable[[str], bool]
@@ -102,6 +103,9 @@ class Manifest(BaseModel):
     out_of_area_reply: str = ""
     after_intake: AfterIntake = Field(default_factory=AfterIntake)
     risk_overrides: dict[str, str] = Field(default_factory=dict)
+    # What the onboarding wizard pre-fills for a new business on this pack.
+    default_services: list[Service] = Field(default_factory=list)
+    default_service_area: list[str] = Field(default_factory=list)
 
     @field_validator("tools")
     @classmethod

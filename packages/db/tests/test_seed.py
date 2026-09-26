@@ -15,8 +15,18 @@ def test_seed_is_idempotent_and_settings_validate(migrated: str) -> None:
         seed(s)
         slugs = set(s.scalars(select(Tenant.slug)))
         assert {"demo-hvac", "demo-dental", "demo-restoration"} <= slugs
-        assert s.scalar(select(func.count()).select_from(User).where(User.role == "owner")) == 3
-        assert s.scalar(select(func.count()).select_from(User).where(User.role == "viewer")) == 3
+        demo = select(Tenant.id).where(Tenant.slug.like("demo-%"))
+        for role in ("owner", "viewer"):
+            n = s.scalar(
+                select(func.count())
+                .select_from(User)
+                .where(User.role == role, User.tenant_id.in_(demo))
+            )
+            assert n == 3, role
+        ops = s.scalar(select(User).where(User.email == "operator@novaxis.test"))
+        assert ops is not None and ops.role == "operator"
+        internal = s.get(Tenant, ops.tenant_id)
+        assert internal is not None and internal.plan == "internal" and not internal.worker_enabled
         for t in s.scalars(
             select(Tenant).where(Tenant.slug.in_(["demo-hvac", "demo-dental", "demo-restoration"]))
         ):

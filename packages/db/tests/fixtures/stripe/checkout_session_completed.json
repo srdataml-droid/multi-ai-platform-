@@ -1,0 +1,18 @@
+{
+  "id": "evt_1PzCheckoutFixture",
+  "object": "event",
+  "type": "checkout.session.completed",
+  "livemode": false,
+  "data": {
+    "object": {
+      "id": "cs_test_fixture",
+      "object": "checkout.session",
+      "mode": "subscription",
+      "client_reference_id": "{{TENANT_ID}}",
+      "customer": "cus_Fixture123",
+      "subscription": "sub_Fixture123",
+      "payment_status": "paid",
+      "metadata": {"tenant_id": "{{TENANT_ID}}", "plan": "pilot"}
+    }
+  }
+}

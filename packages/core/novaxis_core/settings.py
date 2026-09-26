@@ -80,6 +80,24 @@ class Settings(BaseSettings):
     model_summarise: str = "claude-haiku-4-5"
     llm_timeout_seconds: float = 45.0
     llm_max_retries: int = 2
+    # Billing. With no Stripe keys the provider is "demo": checkout activates the tenant
+    # through the same event handler a real webhook uses, and no money moves.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_api_base: str = "https://api.stripe.com"
+    # {"standard": {"monthly": "price_...", "setup": "price_...", "metered": "price_..."}}
+    stripe_prices: dict[str, dict[str, str]] = {}
+    stripe_meter_event_name: str = "novaxis_ai_replies"
+    # PLACEHOLDER prices, shown in the dashboard. Set from usage_events after the pilot.
+    price_setup_pence: int = 50000
+    price_monthly_pence: int = 30000
+    included_messages: int = 1000
+    overage_pence_per_message: int = 20
+    trial_days: int = 14
+    trial_message_cap: int = 100
+    # Self-serve sign-up. The cap stops a leaked demo passcode from filling the database.
+    signup_max_tenants: int = 50
+    inbound_email_domain: str = "inbound.novaxis.test"
     # Worker loop.
     worker_id: str = ""
     worker_lease_seconds: int = 600

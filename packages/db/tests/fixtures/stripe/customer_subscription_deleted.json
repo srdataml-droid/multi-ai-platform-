@@ -1,0 +1,14 @@
+{
+  "id": "evt_1PzSubDeletedFixture",
+  "object": "event",
+  "type": "customer.subscription.deleted",
+  "livemode": false,
+  "data": {
+    "object": {
+      "id": "sub_Fixture123",
+      "object": "subscription",
+      "customer": "cus_Fixture123",
+      "status": "canceled"
+    }
+  }
+}

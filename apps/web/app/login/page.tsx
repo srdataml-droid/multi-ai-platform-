@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, Card, ErrorLine } from "@/components/ui";
@@ -42,6 +43,7 @@ export default function LoginPage() {
           {cfg?.mode === "none" && <p className="text-xs text-red-600">Sign-in is not configured on this deployment.</p>}
           <Button type="submit">Sign in</Button>
         </form>
+        {cfg && cfg.mode !== "none" && <p className="mt-4 text-xs text-slate-500">New business? <Link className="underline" href="/signup">Start a free trial</Link></p>}
       </Card>
     </div>
   );

@@ -18,7 +18,7 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from novaxis_core.models import User
+from novaxis_core.models import Tenant, User
 from novaxis_core.settings import get_settings
 from novaxis_db.session import service_session, tenant_session
 
@@ -29,10 +29,13 @@ class Principal:
     tenant_id: uuid.UUID
     role: str
     email: str
+    # True when an operator has entered a customer's tenant (routes_operator.py). The
+    # principal then carries that tenant's id and the operator role.
+    acting: bool = False
 
 
-def _decode(token: str) -> tuple[str, str | None]:
-    """Verify the JWT; return (subject, email-or-None)."""
+def _decode(token: str) -> tuple[str, str | None, str | None]:
+    """Verify the JWT; return (subject, email-or-None, entered-tenant-or-None)."""
     s = get_settings()
     try:
         claims = jwt.decode(token, s.jwt_secret, algorithms=["HS256"], audience=s.jwt_audience)
@@ -42,13 +45,18 @@ def _decode(token: str) -> tuple[str, str | None]:
     if not isinstance(sub, str) or not sub:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token has no subject")
     email = claims.get("email")
-    return sub, (email.lower() if isinstance(email, str) else None)
+    act = claims.get("act_tenant")
+    return (
+        sub,
+        (email.lower() if isinstance(email, str) else None),
+        act if isinstance(act, str) else None,
+    )
 
 
 def current_principal(authorization: str | None = Header(default=None)) -> Principal:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
-    subject, email = _decode(authorization.split(" ", 1)[1].strip())
+    subject, email, act_tenant = _decode(authorization.split(" ", 1)[1].strip())
     # Cross-tenant lookup by subject: the one place a request uses the service session.
     with service_session() as s:
         user = s.scalar(select(User).where(User.auth_subject == subject))
@@ -60,6 +68,22 @@ def current_principal(authorization: str | None = Header(default=None)) -> Princ
                 s.flush()
         if user is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "no user for this identity")
+        if act_tenant is not None:
+            if user.role != "operator":
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "only operators enter tenants")
+            try:
+                target = s.get(Tenant, uuid.UUID(act_tenant))
+            except ValueError:
+                target = None
+            if target is None:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "no such tenant")
+            return Principal(
+                user_id=user.id,
+                tenant_id=target.id,
+                role="operator",
+                email=user.email,
+                acting=True,
+            )
         return Principal(
             user_id=user.id, tenant_id=user.tenant_id, role=user.role, email=user.email
         )

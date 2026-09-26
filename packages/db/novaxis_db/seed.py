@@ -6,6 +6,8 @@ log in as them without a real identity provider.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -95,6 +97,9 @@ def seed(session: Session) -> list[Tenant]:
         tenant.name = name
         tenant.pack_id = pack_id
         tenant.settings = _settings(pack_id, slug).model_dump()
+        tenant.onboarded_at = tenant.onboarded_at or datetime.now(UTC)
+        if tenant.plan == "trial" and tenant.status == "active":
+            tenant.plan = "pilot"  # demo tenants run as pilots, not trials
         session.flush()
 
         if session.scalar(select(Location).where(Location.tenant_id == tenant.id)) is None:
@@ -113,8 +118,42 @@ def seed(session: Session) -> list[Tenant]:
                     )
                 )
         out.append(tenant)
+    _seed_operator(session)
     session.flush()
     return out
+
+
+OPS_SLUG = "novaxis-ops"
+
+
+def _seed_operator(session: Session) -> None:
+    """Novaxis staff sign in to an internal tenant with the operator role. `plan = internal`
+    keeps it out of the operator console, billing and the worker's timers."""
+    ops = session.scalar(select(Tenant).where(Tenant.slug == OPS_SLUG))
+    if ops is None:
+        ops = Tenant(
+            slug=OPS_SLUG,
+            name="Novaxis Operations",
+            pack_id="generic",
+            plan="internal",
+            status="active",
+            worker_enabled=False,
+            settings=TenantSettings(pack_id="generic").model_dump(),
+            onboarded_at=datetime.now(UTC),
+        )
+        session.add(ops)
+        session.flush()
+    subject = f"dev|operator@{OPS_SLUG}"
+    if session.scalar(select(User).where(User.auth_subject == subject)) is None:
+        session.add(
+            User(
+                tenant_id=ops.id,
+                auth_subject=subject,
+                email="operator@novaxis.test",
+                role="operator",
+                display_name="Novaxis Operator",
+            )
+        )
 
 
 def main() -> None:

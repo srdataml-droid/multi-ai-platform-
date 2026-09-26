@@ -37,6 +37,15 @@ def _dev_login_allowed(passcode: str | None) -> bool:
     return bool(s.demo_passcode) and hmac.compare_digest(passcode or "", s.demo_passcode)
 
 
+def sign_in_mode() -> str:
+    s = get_settings()
+    if s.supabase_url and s.supabase_anon_key:
+        return "supabase"
+    if s.env in ("local", "test"):
+        return "dev"
+    return "demo" if s.demo_passcode else "none"
+
+
 @router.post("/dev-login")
 def dev_login(body: DevLogin) -> dict[str, Any]:
     s = get_settings()
@@ -55,15 +64,11 @@ def dev_login(body: DevLogin) -> dict[str, Any]:
 def auth_config() -> dict[str, Any]:
     """What the login page needs to know: dev, demo passcode, or Supabase sign-in."""
     s = get_settings()
-    if s.supabase_url and s.supabase_anon_key:
-        mode = "supabase"
-    elif s.env in ("local", "test"):
-        mode = "dev"
-    elif s.demo_passcode:
-        mode = "demo"
-    else:
-        mode = "none"
-    return {"mode": mode, "supabase_url": s.supabase_url, "supabase_anon_key": s.supabase_anon_key}
+    return {
+        "mode": sign_in_mode(),
+        "supabase_url": s.supabase_url,
+        "supabase_anon_key": s.supabase_anon_key,
+    }
 
 
 @router.get("/whoami")
