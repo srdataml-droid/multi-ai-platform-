@@ -310,6 +310,22 @@ class MetricsDaily(Base):
     human_takeovers: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
+class UsageEvent(Base):
+    """Metered usage per tenant: tokens, messages, minutes. Pricing reads this (Chunk 10)."""
+
+    __tablename__ = "usage_events"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant_fk()
+    kind: Mapped[str] = mapped_column(String(60), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(80))
+    meta: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = _created_at()
+
+
 # Tables that carry tenant_id and therefore get an RLS policy. The migration and
 # the RLS test both iterate this list, so a new table cannot be forgotten.
 TENANT_TABLES: tuple[str, ...] = (
@@ -325,6 +341,7 @@ TENANT_TABLES: tuple[str, ...] = (
     "audit_log",
     "integrations",
     "metrics_daily",
+    "usage_events",
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")

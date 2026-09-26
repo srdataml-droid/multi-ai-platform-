@@ -107,6 +107,7 @@ make migrate     # alembic upgrade head
 make seed        # seed one demo tenant per pack (idempotent)
 make dev-token u=owner@demo-hvac   # mint a local JWT for a seeded user
 make demo        # runs the demo script for the current chunk
+make worker-once # drain the job queue once (offline with NOVAXIS_LLM_PROVIDER=fake)
 ```
 
 ## Definition of done for the whole Phase 1

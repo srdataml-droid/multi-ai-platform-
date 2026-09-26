@@ -83,7 +83,8 @@ def test_every_tenant_table_has_forced_rls_and_a_policy(migrated: str) -> None:
 
 
 def test_migration_table_list_matches_models(migrated: str) -> None:
-    """Migration 0001 hard-codes its table list; it must equal the models' list."""
+    """Migration 0001 hard-codes its table list; every entry must still be a model table.
+    Later migrations add tables; the live-database test above is the complete guard."""
     import importlib.util
     from pathlib import Path
 
@@ -98,4 +99,4 @@ def test_migration_table_list_matches_models(migrated: str) -> None:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.TENANT_TABLES == TENANT_TABLES
+    assert set(module.TENANT_TABLES) <= set(TENANT_TABLES)

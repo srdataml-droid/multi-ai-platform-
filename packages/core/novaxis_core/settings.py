@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     # Local: Mailpit; production: unused when Postmark is configured.
     smtp_host: str = "localhost"
     smtp_port: int = 1025
+    # LLM. "anthropic" uses the SDK (credentials from ANTHROPIC_API_KEY or an `ant auth`
+    # profile); "fake" uses scripted responses for tests and offline demos.
+    llm_provider: str = "anthropic"
+    model_worker: str = "claude-sonnet-5"
+    model_classify: str = "claude-haiku-4-5"
+    model_summarise: str = "claude-haiku-4-5"
+    llm_timeout_seconds: float = 45.0
+    llm_max_retries: int = 2
+    # Worker loop.
+    worker_id: str = ""
+    worker_lease_seconds: int = 600
+    worker_backoff_seconds: tuple[int, ...] = (10, 60, 300)
+    worker_max_attempts: int = 3
+    context_max_messages: int = 30
+    summary_every_messages: int = 10
 
 
 @lru_cache(maxsize=1)

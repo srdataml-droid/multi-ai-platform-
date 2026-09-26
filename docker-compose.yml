@@ -37,6 +37,8 @@ services:
     command: ["novaxis-worker"]
     environment:
       NOVAXIS_ENV: local
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      NOVAXIS_LLM_PROVIDER: ${NOVAXIS_LLM_PROVIDER:-anthropic}
       NOVAXIS_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@postgres:5432/novaxis
     depends_on:
       postgres: { condition: service_healthy }
