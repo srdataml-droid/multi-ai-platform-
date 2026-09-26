@@ -132,6 +132,9 @@ class Contact(Base):
     emails: Mapped[list[str]] = mapped_column(
         ARRAY(String(320)), nullable=False, server_default=text("'{}'")
     )
+    visitor_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)), nullable=False, server_default=text("'{}'")
+    )
     consent: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
@@ -182,6 +185,9 @@ class Message(Base):
     author: Mapped[str] = mapped_column(String(20), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     provider_ref: Mapped[str | None] = mapped_column(String(200))
+    media: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
 

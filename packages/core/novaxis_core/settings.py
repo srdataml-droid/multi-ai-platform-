@@ -28,6 +28,19 @@ class Settings(BaseSettings):
     jwt_audience: str = "authenticated"
     # The Postgres role the app switches to inside tenant_session. RLS applies to it.
     app_role: str = "novaxis_app"
+    # Public URL the providers call, used to recompute Twilio's signed URL behind a proxy.
+    public_base_url: str = "http://localhost:8000"
+    # Twilio: one Novaxis account, one number per tenant (tenant settings hold the number).
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    # Postmark: outbound server token, and the shared token the inbound webhook must present.
+    postmark_server_token: str = ""
+    postmark_inbound_token: str = ""
+    # Signs web-chat visitor tokens. Defaults to the JWT secret; set separately in production.
+    visitor_token_secret: str = ""
+    # Local: Mailpit; production: unused when Postmark is configured.
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
 
 
 @lru_cache(maxsize=1)

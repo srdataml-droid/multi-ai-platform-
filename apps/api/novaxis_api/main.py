@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from novaxis_api.routes_inbound import router as inbound_router
 from novaxis_api.routes_me import router as me_router
 from novaxis_core.settings import get_settings
 from novaxis_core.version import build_info
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
         return build_info()
 
     app.include_router(me_router)
+    app.include_router(inbound_router)
     return app
 
 

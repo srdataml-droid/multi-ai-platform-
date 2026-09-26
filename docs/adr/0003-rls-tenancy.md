@@ -33,5 +33,7 @@ append-only for the application.
   migration. `test_rls.py` fails if a table with `tenant_id` lacks forced RLS or if the
   migration's table list drifts from `novaxis_core.models.TENANT_TABLES`.
 - A session with no `app.tenant_id` set sees zero rows, never all rows. Tested.
+- The role is a cluster-wide object. Migration 0001 creates it if missing and never drops it,
+  because a second database on the same server (dev next to test) may depend on it.
 - On Supabase, the `postgres` role is not a superuser but can create roles and grant
   membership, so the same migration runs unchanged. Verify on first deploy.

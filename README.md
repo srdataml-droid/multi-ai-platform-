@@ -6,7 +6,7 @@ dashboard, per-industry packs. See `CLAUDE.md` for the rules and `docs/ARCHITECT
 
 ## Status
 
-Chunks 0 and 1 done: skeleton, tooling, CI, the twelve core tables with row-level security proven by tests, JWT auth to a tenant-scoped session, `/me`, seed tenants. Chunk 2 (channel adapters and the inbound path) is next.
+Chunks 0 to 2 done: skeleton and CI; core tables with row-level security proven by tests; JWT auth and `/me`; channel adapters for web chat, Twilio SMS and Postmark email, with signature checks, idempotent replay, opt-out handling and contact matching. Chunk 3 (the worker loop and the first LLM turn) is next.
 
 ## Where things are
 

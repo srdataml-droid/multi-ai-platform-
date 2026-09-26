@@ -124,18 +124,13 @@ def _secure() -> None:
 
 
 def _unsecure() -> None:
+    # The role and its membership grant are cluster-wide objects shared by every database
+    # on the server (dev and test locally). Downgrade removes this database's policies and
+    # privileges and leaves the role in place.
     for table in (*TENANT_TABLES, "tenants"):
         op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
     op.execute(f"REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM {APP_ROLE}")
     op.execute(f"REVOKE USAGE ON SCHEMA public FROM {APP_ROLE}")
-    op.execute(
-        f"""
-        DO $$ BEGIN
-            EXECUTE format('REVOKE {APP_ROLE} FROM %I', current_user);
-        END $$;
-        """
-    )
-    op.execute(f"DROP ROLE IF EXISTS {APP_ROLE}")
 
 
 def upgrade() -> None:

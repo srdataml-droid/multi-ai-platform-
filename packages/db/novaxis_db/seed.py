@@ -10,13 +10,37 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.models import Location, Tenant, User
-from novaxis_core.tenant_settings import DayHours, EscalationContact, Service, TenantSettings
+from novaxis_core.tenant_settings import (
+    ChannelConfig,
+    DayHours,
+    EscalationContact,
+    Service,
+    TenantSettings,
+)
 from novaxis_db.session import service_session
 
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri")
 
 
-def _settings(pack_id: str) -> TenantSettings:
+def _channels(slug: str) -> dict[str, ChannelConfig]:
+    """Demo channel config. The Twilio number is a documented test number, never live."""
+    return {
+        "webchat": ChannelConfig(enabled=True),
+        "twilio_sms": ChannelConfig(
+            enabled=True,
+            config={"number": "+15005550006" if slug == "demo-hvac" else "+15005550007"},
+        ),
+        "email": ChannelConfig(
+            enabled=True,
+            config={
+                "inbound_address": f"{slug}@inbound.novaxis.test",
+                "from_address": f"hello@{slug}.test",
+            },
+        ),
+    }
+
+
+def _settings(pack_id: str, slug: str) -> TenantSettings:
     hours = {d: DayHours(open="08:00", close="18:00") for d in WEEKDAYS}
     if pack_id == "hvac":
         services = [
@@ -40,6 +64,7 @@ def _settings(pack_id: str) -> TenantSettings:
         escalation_contacts=[
             EscalationContact(name="On-call", phone="+447700900000", email="oncall@example.test")
         ],
+        channels=_channels(slug),
     )
 
 
@@ -58,7 +83,7 @@ def seed(session: Session) -> list[Tenant]:
             session.add(tenant)
         tenant.name = name
         tenant.pack_id = pack_id
-        tenant.settings = _settings(pack_id).model_dump()
+        tenant.settings = _settings(pack_id, slug).model_dump()
         session.flush()
 
         if session.scalar(select(Location).where(Location.tenant_id == tenant.id)) is None:
