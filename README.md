@@ -8,6 +8,11 @@ dashboard, per-industry packs. See `CLAUDE.md` for the rules and `docs/ARCHITECT
 
 Chunks 0 to 5 done: skeleton and CI; core tables with row-level security; JWT auth; three channel adapters; the worker loop and LLM turn; the approval gate and executors; packs as validated folders with an intake engine, service-area check, idle-customer workflows and golden evals; three packs (HVAC, dental, restoration) on one core, each passing 5 of 5 evals with the scripted model; sensitive intake fields encrypted at rest; customer photos and attachments stored under the tenant's prefix; scheduling with held slots, a deterministic window parser, Google Calendar as the system of record (business hours as fallback), idempotent confirmation and reminder steps. the dashboard: inbox, work queue, approvals, conversation with take-over and suggested replies, contacts, schedule, analytics from hourly roll-ups, and settings for hours, services, service area, risk overrides, staff, integrations and the widget snippet. Phase 1 is complete; the pilot demo runs in the browser and in CI. Chunk 10 (billing and onboarding) is next.
 
+## Live deployment
+
+Hosted on Vercel (web and API) with Supabase Postgres in London. See `docs/adr/0013-vercel-hosting.md`
+for how the worker runs without a process, how migrations run, and the known limits.
+
 ## Where things are
 
 | Path | What it is |

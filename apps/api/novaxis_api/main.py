@@ -7,7 +7,8 @@ process does everything slow.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from novaxis_api.routes_appointments import router as appointments_router
 from novaxis_api.routes_approvals import router as approvals_router
@@ -16,6 +17,7 @@ from novaxis_api.routes_conversations import router as conversations_router
 from novaxis_api.routes_dashboard import router as dashboard_router
 from novaxis_api.routes_inbound import router as inbound_router
 from novaxis_api.routes_integrations import router as integrations_router
+from novaxis_api.routes_internal import router as internal_router
 from novaxis_api.routes_me import router as me_router
 from novaxis_api.routes_media import router as media_router
 from novaxis_api.routes_settings import router as settings_router
@@ -45,6 +47,19 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router)
     app.include_router(settings_router)
     app.include_router(auth_router)
+    app.include_router(internal_router)
+
+    if get_settings().inline_worker:
+        from novaxis_api.inline_worker import drain_for
+
+        @app.middleware("http")
+        async def run_jobs_after_writes(request: Request, call_next):  # type: ignore[no-untyped-def]
+            response: Response = await call_next(request)
+            # Serverless has no worker process: do the queued work before replying.
+            if request.method in ("POST", "PUT") and not request.url.path.startswith("/internal"):
+                await run_in_threadpool(drain_for)
+            return response
+
     return app
 
 

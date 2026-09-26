@@ -21,18 +21,18 @@ export function setToken(token: string | null): void {
   }
 }
 
-export type AuthConfig = { mode: "dev" | "supabase"; supabase_url: string; supabase_anon_key: string };
+export type AuthConfig = { mode: "dev" | "demo" | "supabase" | "none"; supabase_url: string; supabase_anon_key: string };
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {
   const r = await fetch("/api/auth/config");
   return (await r.json()) as AuthConfig;
 }
 
-export async function devLogin(email: string): Promise<string> {
+export async function devLogin(email: string, passcode?: string): Promise<string> {
   const r = await fetch("/api/auth/dev-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(passcode ? { email, passcode } : { email }),
   });
   if (!r.ok) throw new Error((await r.json()).detail ?? "login failed");
   return ((await r.json()) as { token: string }).token;

@@ -19,13 +19,29 @@ from functools import lru_cache
 
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.pool import NullPool
 
 from novaxis_core.settings import get_settings
 
 
+def normalise_url(url: str) -> str:
+    """Accept the postgres:// form Supabase and Vercel hand out."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
 @lru_cache(maxsize=4)
 def get_engine(url: str | None = None) -> Engine:
-    return create_engine(url or get_settings().database_url, pool_pre_ping=True)
+    s = get_settings()
+    target = normalise_url(url or s.database_url)
+    if s.db_pooler:
+        # Serverless: every invocation may be a fresh process, and Supabase's transaction
+        # pooler cannot hold prepared statements. Tenant isolation still works because it
+        # uses only transaction-scoped settings (SET LOCAL ROLE, set_config(..., true)).
+        return create_engine(target, poolclass=NullPool, connect_args={"prepare_threshold": None})
+    return create_engine(target, pool_pre_ping=True)
 
 
 def _apply_tenant(conn: Connection, tenant_id: uuid.UUID, role: str) -> None:

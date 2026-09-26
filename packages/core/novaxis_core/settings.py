@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     env: str = "local"
     database_url: str = "postgresql+psycopg://novaxis:novaxis@localhost:5432/novaxis"
     worker_enabled: bool = True
+    # Serverless hosting (Vercel). db_pooler: connect through Supabase's transaction-mode
+    # pooler (no connection pool, no prepared statements). inline_worker: run queued jobs
+    # after each request instead of in a separate always-on process.
+    db_pooler: bool = False
+    inline_worker: bool = False
+    inline_worker_budget_seconds: float = 20.0
+    # Protects /internal/* (tick, migrate, seed). Empty disables those endpoints.
+    cron_secret: str = ""
+    # A shared passcode that enables the passwordless demo login outside local.
+    demo_passcode: str = ""
     worker_poll_seconds: float = 1.0
     log_level: str = "INFO"
     # HS256 secret that signs dashboard JWTs. Supabase projects expose theirs in

@@ -8,6 +8,7 @@ login so an owner can add staff by email before they have ever signed in.
 
 from __future__ import annotations
 
+import hmac
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -26,12 +27,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class DevLogin(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str
+    passcode: str | None = None
+
+
+def _dev_login_allowed(passcode: str | None) -> bool:
+    s = get_settings()
+    if s.env in ("local", "test"):
+        return True
+    return bool(s.demo_passcode) and hmac.compare_digest(passcode or "", s.demo_passcode)
 
 
 @router.post("/dev-login")
 def dev_login(body: DevLogin) -> dict[str, Any]:
-    if get_settings().env not in ("local", "test"):
+    s = get_settings()
+    if s.env not in ("local", "test") and not s.demo_passcode:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not available")
+    if not _dev_login_allowed(body.passcode):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong passcode")
     with service_session() as s:
         u = s.scalar(select(User).where(User.email == body.email.lower()))
         if u is None:
@@ -41,13 +53,17 @@ def dev_login(body: DevLogin) -> dict[str, Any]:
 
 @router.get("/config")
 def auth_config() -> dict[str, Any]:
-    """What the login page needs to know: dev login or Supabase."""
+    """What the login page needs to know: dev, demo passcode, or Supabase sign-in."""
     s = get_settings()
-    return {
-        "mode": "supabase" if s.supabase_url and s.supabase_anon_key else "dev",
-        "supabase_url": s.supabase_url,
-        "supabase_anon_key": s.supabase_anon_key,
-    }
+    if s.supabase_url and s.supabase_anon_key:
+        mode = "supabase"
+    elif s.env in ("local", "test"):
+        mode = "dev"
+    elif s.demo_passcode:
+        mode = "demo"
+    else:
+        mode = "none"
+    return {"mode": mode, "supabase_url": s.supabase_url, "supabase_anon_key": s.supabase_anon_key}
 
 
 @router.get("/whoami")

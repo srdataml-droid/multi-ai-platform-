@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [cfg, setCfg] = useState<AuthConfig | null>(null);
   const [email, setEmail] = useState("owner@demo-hvac.test");
   const [password, setPassword] = useState("");
+  const [passcode, setPasscode] = useState("");
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     fetchAuthConfig().then(setCfg).catch(() => setCfg({ mode: "dev", supabase_url: "", supabase_anon_key: "" }));
@@ -17,7 +18,8 @@ export default function LoginPage() {
   const submit = async () => {
     setError(null);
     try {
-      const token = cfg?.mode === "supabase" ? await supabaseLogin(cfg, email, password) : await devLogin(email);
+      const token =
+        cfg?.mode === "supabase" ? await supabaseLogin(cfg, email, password) : await devLogin(email, cfg?.mode === "demo" ? passcode : undefined);
       setToken(token);
       router.replace("/inbox");
     } catch (e) {
@@ -33,7 +35,11 @@ export default function LoginPage() {
           {cfg?.mode === "supabase" && (
             <label className="text-sm">Password<input type="password" className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           )}
+          {cfg?.mode === "demo" && (
+            <label className="text-sm">Demo passcode<input type="password" data-testid="passcode" className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={passcode} onChange={(e) => setPasscode(e.target.value)} /></label>
+          )}
           {cfg?.mode === "dev" && <p className="text-xs text-slate-500">Local mode: any seeded email signs in without a password.</p>}
+          {cfg?.mode === "none" && <p className="text-xs text-red-600">Sign-in is not configured on this deployment.</p>}
           <Button type="submit">Sign in</Button>
         </form>
       </Card>
