@@ -19,11 +19,14 @@ log = logging.getLogger("novaxis.routing")
 
 # channel -> the key inside settings.channels[channel].config that identifies the tenant
 ROUTE_KEYS = {"twilio_sms": "number", "email": "inbound_address"}
+# Channels that share another channel's address: one Twilio number takes texts and calls.
+ROUTE_ALIASES = {"twilio_voice": "twilio_sms"}
 
 
 def resolve_tenant(session: Session, channel: str, tenant_ref: str) -> Tenant | None:
     if channel == "webchat":
         return session.scalar(select(Tenant).where(Tenant.slug == tenant_ref))
+    channel = ROUTE_ALIASES.get(channel, channel)
     key = ROUTE_KEYS.get(channel)
     if key is None:
         return None

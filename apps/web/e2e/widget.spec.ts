@@ -36,3 +36,46 @@ test("the chat widget works when embedded on another website", async ({ page }) 
   });
   await expect(page.getByText(`Sorry to hear that ${marker}`)).toBeVisible({ timeout: 15_000 });
 });
+
+test("a visitor can speak a message and hear the reply", async ({ page }) => {
+  const marker = `voice-${Date.now()}`;
+  // Headless browsers have no microphone or speakers: stand-ins return a transcript and
+  // record what would be spoken. The widget code under test is the real one.
+  await page.addInitScript((heard: string) => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__spoken = [];
+    class FakeRecognition {
+      lang = "";
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        setTimeout(() => {
+          this.onresult?.({ results: [[{ transcript: heard }]] });
+          this.onend?.();
+        }, 50);
+      }
+    }
+    w.SpeechRecognition = FakeRecognition;
+    Object.defineProperty(window, "speechSynthesis", {
+      value: { speak: (u: { text: string }) => (w.__spoken as string[]).push(u.text), cancel: () => undefined },
+    });
+    w.SpeechSynthesisUtterance = class { lang = ""; constructor(public text: string) {} };
+  }, `my boiler is leaking ${marker}`);
+
+  await page.goto(SITE);
+  await page.getByTitle("Chat with us").click();
+  await page.getByTitle("Read replies aloud").click();
+  const sent = page.waitForRequest((r) => r.url().startsWith(`${API}/inbound/webchat/demo-hvac`) && r.method() === "POST");
+  await page.getByTitle("Speak your message").click();
+  expect((await sent).postDataJSON().body).toBe(`my boiler is leaking ${marker}`);
+
+  execFileSync("uv", ["run", "python", "-m", "novaxis_worker.main", "--once"], {
+    cwd: REPO,
+    env: { ...process.env, NOVAXIS_LLM_PROVIDER: "fake", NOVAXIS_FAKE_SCRIPT: JSON.stringify([{ text: `On our way ${marker}`, calls: [] }]) },
+    stdio: "pipe",
+  });
+  await expect(page.getByText(`On our way ${marker}`)).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.join(" | "))).toContain(`On our way ${marker}`);
+});

@@ -102,6 +102,20 @@ def tenant_facts(tenant: Tenant) -> str:
     return "Business facts:\n" + "\n".join(lines)
 
 
+def disclosure_for(tenant: Tenant) -> str:
+    """The AI disclosure opening a customer's first reply (and a phone call's greeting)."""
+    # replace, not format: an owner's own braces in the text must not break every reply.
+    disclosure = (
+        str(tenant.settings.get("disclosure_text", ""))
+        .replace("{business_name}", tenant.name)
+        .strip()
+    )
+    privacy = str(tenant.settings.get("privacy_url") or "").strip()
+    if privacy:
+        disclosure = f"{disclosure} How we use your details: {privacy}".strip()
+    return disclosure
+
+
 def build_messages(history: list[Message]) -> list[dict[str, Any]]:
     """Alternating user/assistant text turns. Consecutive same-role messages merge."""
     out: list[dict[str, Any]] = []
@@ -397,15 +411,7 @@ def run_turn(
             reply_text = f"{reply_text}\n\n{pack.high_risk_followup}"
 
     if first_worker_reply:
-        # replace, not format: an owner's own braces in the text must not break every reply.
-        disclosure = (
-            str(tenant.settings.get("disclosure_text", ""))
-            .replace("{business_name}", tenant.name)
-            .strip()
-        )
-        privacy = str(tenant.settings.get("privacy_url") or "").strip()
-        if privacy:
-            disclosure = f"{disclosure} How we use your details: {privacy}".strip()
+        disclosure = disclosure_for(tenant)
         if disclosure:
             reply_text = f"{disclosure}\n\n{reply_text}"
 

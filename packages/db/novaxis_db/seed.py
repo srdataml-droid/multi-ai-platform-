@@ -36,6 +36,8 @@ def _channels(slug: str) -> dict[str, ChannelConfig]:
                 )
             },
         ),
+        # Calls to the same Twilio number (docs/voice.md).
+        "twilio_voice": ChannelConfig(enabled=True),
         "email": ChannelConfig(
             enabled=True,
             config={

@@ -108,6 +108,11 @@ export default function SettingsPage() {
       </Card>
       <Card title="Channels">
         <ul className="text-sm">{Object.entries(st.channels).map(([k, c]) => <li key={k} className="flex justify-between border-t border-slate-100 py-1"><span>{k}</span><span>{c.enabled ? <Badge tone="green">enabled</Badge> : <Badge>off</Badge>} <span className="text-xs text-slate-500">{Object.values(c.config).join(" · ")}</span></span></li>)}</ul>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input data-testid="answer-calls" type="checkbox" checked={Boolean(st.channels.twilio_voice?.enabled)} onChange={(e) => update({ channels: { ...st.channels, twilio_voice: { enabled: e.target.checked, config: st.channels.twilio_voice?.config ?? {} } } })} />
+          Answer phone calls to your SMS number with the assistant
+        </label>
+        <p className="mt-1 text-xs text-slate-500">Callers talk, the assistant answers out loud, and emergencies are put through to your on-call number. Needs a Twilio number (see docs/voice.md). Press Save all at the top.</p>
       </Card>
       <Card title="Calendar and integrations" actions={<Button tone="secondary" onClick={connectGoogle}>Connect Google Calendar</Button>}>
         <p className="text-sm">System of record: <strong>{integ?.system_of_record ?? "…"}</strong></p>
