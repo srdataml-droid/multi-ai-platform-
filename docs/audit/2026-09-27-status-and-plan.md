@@ -114,58 +114,82 @@ Principle (founder's call, 27 Sep): **one strong product before scaling.** Depth
 2. Code: Sentry free tier for errors (E1); move the health check to a reliable timer (N2);
    Vercel ignore rule for `main` (N3); email verification on sign-up (G2).
 
-### Phase B: connect the real AI (small, capped spend)
-1. Founder: Anthropic account, **monthly spend cap**, key into Vercel
-   (`NOVAXIS_LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`). Keep the worker off for real
-   businesses until step 3 passes.
-2. Code: run `make evals-real` on all 16 golden conversations and record the pass rate and
-   cost per conversation.
-3. Code: grow to about 25 golden conversations per pack (Chunk 13): prompt injection, abuse,
-   medical-advice bait, messages that are only "?" or "yes". Hold 90%+ on the real model
-   before any real customer.
-4. Shadow mode for the first pilot: the AI drafts, staff approve before anything is sent.
-   The per-business setting `risk_overrides: {"reply": "medium"}` should route every reply
-   through approval; test that end to end before relying on it. Measure how often staff
-   change the draft.
+### Founder decisions (27 Sep, after the first draft of this plan)
+- **All channels, not one:** text (web chat, SMS, email, WhatsApp), **voice** and **photo**.
+- **Open-source model first**, then switch to whatever is most affordable. Not Claude for now.
+- **Camera for stock counting** (count products, keep stock levels) is part of the vision.
 
-### Phase C: one niche, one channel decision (founder decides first)
-Pick **one** vertical and **one** way to win (section 3). Options:
-- **(a) UK dental, text + WhatsApp, safety and compliance as the pitch.** Strongest fit
-  with what is built.
-- **(b) UK trades with voice.** Biggest market, most competitors; needs telephony (money)
-  and a voice pipeline.
-- **(c) Restoration, photo-first text intake with insurer details.** Least UK competition
-  found; the pack exists.
+### Phase B: connect a real AI, open source first
+The code talks to the model through one interface (`packages/core/novaxis_core/llm.py`);
+today it has a scripted stand-in and an Anthropic adapter.
+1. Code: add **one "OpenAI-compatible" adapter**. Ollama (local), vLLM (self-hosted) and most
+   hosted open-model services (Groq, Together, OpenRouter, ...) speak this format, so
+   switching to "something affordable" is a change of three settings, with no code
+   change: base URL, model name and key. [VERIFY each provider's tool-calling support
+   before choosing it.]
+2. Code: run the 16 golden conversations on two or three open models and record the pass
+   rate and cost. **The evals choose the model, not the brand.** The model must call tools
+   reliably: booking and emergency escalation depend on it.
+3. Code: grow to about 25 golden conversations per pack: prompt injection, abuse,
+   medical-advice bait, messages that are only "?" or "yes". Hold 90%+ before any real
+   customer.
+4. Founder: the laptop (no GPU, about 13GB RAM) can run only small models, slowly: fine
+   for trying, not for customers. Production means a hosted open-model API (pay per token)
+   or a rented GPU. Set a monthly spend cap either way.
+5. Shadow mode for the first pilot: the AI drafts, staff approve before anything is sent.
+   The per-business setting `risk_overrides: {"reply": "medium"}` should route every reply
+   through approval; test that end to end before relying on it.
+
+### Phase C: voice and photo on the same brain
+Every channel feeds the same worker: approval step, packs, bookings. A new channel is an
+adapter that turns its input into text (plus attachments) and the reply back into its format.
+- **Photo (partly built):** photos are received and stored today but lost between function
+  runs (E2) and not yet understood. Next: durable storage, then an open vision-language
+  model to describe the photo ("water stain on ceiling, about 1m wide") into the
+  conversation. [VERIFY model licence and quality]
+- **Voice:** phone number and calls (a telephony provider, which costs money), speech-to-text
+  (open source: Whisper), text-to-speech (open-source options exist [VERIFY which]), and
+  a low-latency path. A caller will not wait 10 seconds, so voice cannot use today's
+  request-bound worker unchanged (see "Arch" in section 2).
+- **WhatsApp:** Meta's business API (a provider account, per-conversation fees [VERIFY]).
+- Order proposed: **photo → WhatsApp → voice** (cheapest first, voice last because it
+  needs the most new infrastructure). Founder may reorder.
 
 Then one pilot business and a direct integration with its software (D3).
 
-### Phase D: machine learning, when the data exists
-The founder wants an ML model and neural network. Recorded dissent:
-- **The Simplifier (K1) vetoes a neural network now:** there is no data to train one, and
-  the language model already handles text.
-- **The ML Engineer's case (kept for later):** classical models on our own data are real
-  differentiators and fit the founder's stack (scikit-learn, XGBoost/LightGBM, MLflow),
-  trainable on his laptop without a GPU.
+### Phase D: machine learning and neural networks
+Where they fit, now that stock counting is in scope:
 
-| Model | Predicts | Needs |
-|---|---|---|
-| No-show risk (dental) | Which bookings will not turn up, so reminders can target them | A few thousand bookings with an attended/missed label. The C-confirm flow (A7) already records confirmations |
-| Job duration (trades) | How long a job type really takes, for better slots | Booked vs actual times from the booking software |
-| Urgency / lead value | Which enquiries to answer first | Outcome labels (booked, value) per conversation |
+| Model | Kind | Predicts | Needs |
+|---|---|---|---|
+| **Stock counting from a photo** | Neural network (object detection) | How many of each product is on a shelf | A few hundred labelled photos per product type; training on a GPU (Colab works); licence check: some popular detectors are AGPL, which has conditions for commercial use [VERIFY before choosing] |
+| No-show risk (dental) | Classical ML (XGBoost) | Which bookings will not turn up | A few thousand bookings labelled attended/missed; the C-confirm flow (A7) already records confirmations |
+| Job duration (trades) | Classical ML | How long a job really takes | Booked vs actual times |
+| Urgency / lead value | Classical ML | Which enquiries to answer first | Outcome labels per conversation |
 
-**Start now at zero cost:** keep outcomes (attended, booked, cancelled, job value) on every
-appointment and conversation so this data exists later. `metrics_daily` and
-`usage_events` already hold counts; per-booking outcome labels are the gap.
+**Start now at zero cost:** record outcomes (attended, cancelled, job value) on every
+booking, and keep stock photos with the counts staff confirm, so training data exists later.
+
+**Recorded dissent (the founder's call stands):**
+- **The Simplifier (K1)** says stock counting serves a different customer: shops and
+  warehouses, not service businesses taking bookings. Building it alongside voice risks
+  two half-products. Proposal: finish text + photo + voice for service businesses first,
+  then stock counting as its own pack on the same platform.
+- **The ML Engineer** replies that stock counting is the one place a neural network is
+  justified now (vision needs one), and the photo pipeline is shared.
+- **Resolution:** one platform. Stock counting becomes a pack after the pilot proves the
+  core loop.
 
 ## 5. Questions for the founder
-1. Which niche and channel (Phase C: a, b or c)?
+1. First pilot business: which type (trades, dental, restoration, or a shop that counts
+   stock)?
 2. Is UK still first, or should an African market run alongside (Novaxis focus)? The
    research above is UK/US only.
-3. Monthly spend cap for the real model in Phase B?
+3. Monthly spend cap for the hosted open model (Phase B)?
 4. Two hours a week for code review (H2): which day?
 
 ## 6. When a session resumes
-Read this file, then in order: Phase A code items → Phase B (once the key exists) →
+Read this file, then in order: Phase A code items → Phase B (open-source adapter and evals) →
 whatever the founder chose in section 5. Keep the working rules:
 - find → why → fix only when asked;
 - every fix gets a test that fails on the old code;
