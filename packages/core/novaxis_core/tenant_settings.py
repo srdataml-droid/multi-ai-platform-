@@ -111,6 +111,12 @@ class TenantSettings(BaseModel):
             if address is None:
                 raise ValueError("email inbound_address must be an email address")
             email.config["inbound_address"] = address
+        wa = v.get("whatsapp")
+        if wa and wa.config.get("phone_number_id"):
+            pid = str(wa.config["phone_number_id"]).strip()
+            if not pid.isdigit():
+                raise ValueError("whatsapp phone_number_id is the number id from Meta (digits)")
+            wa.config["phone_number_id"] = pid
         return v
 
     @field_validator("privacy_url")

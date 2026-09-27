@@ -27,6 +27,8 @@ class InboundRequest:
     form: dict[str, str] = field(default_factory=dict)
     json: dict[str, Any] | None = None
     query: dict[str, str] = field(default_factory=dict)
+    # Exact bytes as received: signatures over the body (WhatsApp) must use these.
+    raw_body: bytes = b""
 
     def header(self, name: str) -> str | None:
         wanted = name.lower()

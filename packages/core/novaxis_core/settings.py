@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     # Postmark: outbound server token, and the shared token the inbound webhook must present.
+    # WhatsApp Cloud API (Meta). The app secret checks webhook signatures; the verify token
+    # answers Meta's subscription handshake; the access token sends messages.
+    whatsapp_app_secret: str = ""
+    whatsapp_verify_token: str = ""
+    whatsapp_access_token: str = ""
+    whatsapp_api_base: str = "https://graph.facebook.com/v21.0"  # [VERIFY current version]
     postmark_server_token: str = ""
     postmark_inbound_token: str = ""
     # Signs web-chat visitor tokens. Defaults to the JWT secret; set separately in production.

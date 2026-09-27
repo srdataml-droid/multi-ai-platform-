@@ -16,6 +16,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from novaxis_core.channels import Media
+from novaxis_core.channels.whatsapp import MEDIA_PREFIX, download
 from novaxis_core.models import AuditLog, Job, Message, Tenant
 from novaxis_core.settings import get_settings
 from novaxis_core.storage import MediaRejectedError, check_media, get_store, media_key
@@ -80,16 +81,16 @@ def fetch_media(
                 continue
             url = str(e.get("url", ""))
             try:
-                r = client.get(url, auth=_provider_auth(url))
-                r.raise_for_status()
-                ct = (
-                    r.headers.get("content-type")
-                    or e.get("content_type")
-                    or "application/octet-stream"
-                )
-                check_media(r.content, ct)
+                if url.startswith(MEDIA_PREFIX):
+                    content, got_ct = download(url[len(MEDIA_PREFIX) :], transport)
+                else:
+                    r = client.get(url, auth=_provider_auth(url))
+                    r.raise_for_status()
+                    content, got_ct = r.content, r.headers.get("content-type") or ""
+                ct = got_ct or e.get("content_type") or "application/octet-stream"
+                check_media(content, ct)
                 key = media_key(tenant.id, msg.id, i, ct, e.get("filename"))
-                obj = get_store().put(key, r.content, ct)
+                obj = get_store().put(key, content, ct)
                 e.update({"stored_key": obj.key, "size": obj.size, "content_type": ct})
                 stored += 1
             except (httpx.HTTPError, MediaRejectedError, ValueError) as exc:

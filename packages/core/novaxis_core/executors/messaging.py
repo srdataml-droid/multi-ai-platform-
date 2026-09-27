@@ -6,9 +6,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import needs_a_person
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
 from novaxis_core.models import ActionProposal, Conversation, Job, Message, Tenant
-from novaxis_core.outbound import send_message
+from novaxis_core.outbound import ReplyWindowClosedError, send_message
 
 
 def _send_text(session: Session, tenant: Tenant, proposal: ActionProposal, text: str) -> ExecResult:
@@ -27,6 +28,13 @@ def _send_text(session: Session, tenant: Tenant, proposal: ActionProposal, text:
     session.flush()
     try:
         sent = send_message(session, tenant, msg.id)
+    except ReplyWindowClosedError as exc:
+        # Retrying cannot help: the customer must write first, or a person uses another
+        # route (a call, an approved template). Tell the team.
+        if conv.status not in ("waiting_human", "closed"):
+            conv.status = "waiting_human"
+        needs_a_person(session, tenant.id, conv.id)
+        return ExecResult(False, {"message_id": str(msg.id)}, str(exc))
     except PermissionError as exc:  # opted out: never retry
         return ExecResult(False, {"message_id": str(msg.id)}, str(exc))
     except Exception as exc:  # noqa: BLE001 - a provider hiccup must not silently drop a reply

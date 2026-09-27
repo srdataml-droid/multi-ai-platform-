@@ -60,3 +60,16 @@ def test_routing_addresses_are_stored_in_one_form() -> None:
             TenantSettings(pack_id="hvac", channels=channels(twilio_sms=bad))
     with pytest.raises(ValidationError):
         TenantSettings(pack_id="hvac", channels=channels(email={"inbound_address": "nope"}))
+
+
+def test_whatsapp_number_id_must_be_digits() -> None:
+    ts = TenantSettings(
+        pack_id="hvac",
+        channels={"whatsapp": {"enabled": True, "config": {"phone_number_id": " 1234567 "}}},
+    )
+    assert ts.channels["whatsapp"].config["phone_number_id"] == "1234567"
+    with pytest.raises(ValidationError):
+        TenantSettings(
+            pack_id="hvac",
+            channels={"whatsapp": {"enabled": True, "config": {"phone_number_id": "+44 7700"}}},
+        )

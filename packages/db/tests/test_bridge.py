@@ -61,8 +61,8 @@ def shop(migrated: str) -> uuid.UUID:
             slug=f"bridge-{uuid.uuid4().hex[:8]}",
             pack_id="hvac",
             status="active",
-            # Demo-hvac's channels without its SMS number and inbound address, which are
-            # unique per business.
+            # Demo-hvac's channels without its SMS number, inbound address and WhatsApp id,
+            # which are unique per business.
             settings={
                 **demo.settings,
                 "channels": {
@@ -71,7 +71,7 @@ def shop(migrated: str) -> uuid.UUID:
                         "config": {
                             k: v
                             for k, v in ch.get("config", {}).items()
-                            if k not in ("number", "inbound_address")
+                            if k not in ("number", "inbound_address", "phone_number_id")
                         },
                     }
                     for name, ch in demo.settings["channels"].items()

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from novaxis_api.limits import client_ip, enforce
 from novaxis_core.channels import InboundRequest, NormalisedInbound, ParseError, get_adapter
 from novaxis_core.channels.webchat import mint_visitor_token, verify_visitor_token
+from novaxis_core.channels.whatsapp import verify_handshake
 from novaxis_core.inbound import IngestResult, ingest
 from novaxis_core.models import Contact, Conversation, Message, Tenant
 from novaxis_core.routing import resolve_tenant
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/inbound", tags=["inbound"])
 async def _to_inbound_request(request: Request) -> InboundRequest:
     form: dict[str, str] = {}
     body_json: dict[str, Any] | None = None
+    raw = await request.body()
     ctype = request.headers.get("content-type", "")
     if "application/json" in ctype:
         parsed = await request.json()
@@ -40,6 +42,7 @@ async def _to_inbound_request(request: Request) -> InboundRequest:
         form=form,
         json=body_json,
         query=dict(request.query_params),
+        raw_body=raw,
     )
 
 
@@ -190,3 +193,36 @@ async def email_postmark(request: Request) -> dict[str, Any]:
     inbound = _verify_and_parse("email", req)
     _, result = _route_and_ingest(inbound)
     return {"ok": True, "duplicate": result.duplicate}
+
+
+@router.get("/whatsapp")
+def whatsapp_handshake(request: Request) -> Response:
+    """Meta's one-off subscription check when the webhook is set up."""
+    challenge = verify_handshake(dict(request.query_params))
+    if challenge is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "verify token does not match")
+    return Response(content=challenge, media_type="text/plain")
+
+
+@router.post("/whatsapp")
+async def whatsapp(request: Request) -> dict[str, Any]:
+    """One POST can hold several messages, or only delivery receipts (ignored). Meta retries
+    anything that is not a 200, so every message is ingested idempotently by its id, and a
+    message for a business that has not enabled WhatsApp is dropped with a log line, not an
+    error that would make Meta retry for days."""
+    req = await _to_inbound_request(request)
+    adapter = get_adapter("whatsapp")
+    if not adapter.verify_signature(req):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "bad signature")
+    try:
+        messages = adapter.parse_many(req)  # type: ignore[attr-defined]
+    except ParseError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    taken = 0
+    for inbound in messages:
+        try:
+            _route_and_ingest(inbound)
+            taken += 1
+        except HTTPException as exc:
+            log.warning("whatsapp message %s dropped: %s", inbound.provider_ref, exc.detail)
+    return {"ok": True, "messages": len(messages), "ingested": taken}

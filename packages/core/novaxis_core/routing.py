@@ -18,7 +18,7 @@ from novaxis_core.models import Tenant
 log = logging.getLogger("novaxis.routing")
 
 # channel -> the key inside settings.channels[channel].config that identifies the tenant
-ROUTE_KEYS = {"twilio_sms": "number", "email": "inbound_address"}
+ROUTE_KEYS = {"twilio_sms": "number", "email": "inbound_address", "whatsapp": "phone_number_id"}
 # Channels that share another channel's address: one Twilio number takes texts and calls.
 ROUTE_ALIASES = {"twilio_voice": "twilio_sms"}
 
@@ -75,4 +75,6 @@ def claim_error(exc: IntegrityError) -> str | None:
         return "That SMS number is already connected to another business."
     if "uq_tenants_inbound_email" in text:
         return "That inbound email address is already used by another business."
+    if "uq_tenants_whatsapp_number" in text:
+        return "That WhatsApp number is already connected to another business."
     return None

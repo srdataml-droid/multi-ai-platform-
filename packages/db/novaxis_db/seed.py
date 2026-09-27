@@ -36,6 +36,16 @@ def _channels(slug: str) -> dict[str, ChannelConfig]:
                 )
             },
         ),
+        # A test WhatsApp phone-number id per demo business (docs/whatsapp.md).
+        "whatsapp": ChannelConfig(
+            enabled=True,
+            config={
+                "phone_number_id": {
+                    "demo-hvac": "100000000000001",
+                    "demo-dental": "100000000000002",
+                }.get(slug, "100000000000003")
+            },
+        ),
         # Calls to the same Twilio number (docs/voice.md).
         "twilio_voice": ChannelConfig(enabled=True),
         "email": ChannelConfig(
