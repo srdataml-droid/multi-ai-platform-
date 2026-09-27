@@ -160,3 +160,30 @@ def test_timer_sees_a_broken_loop_as_a_failure(env, monkeypatch: pytest.MonkeyPa
     assert r.status_code == 500 and "RuntimeError" in r.json()["detail"]
     # After a customer's request the same failure is swallowed: the message is still accepted.
     assert inline_worker.drain_for(budget_seconds=1) == 0
+
+
+def test_deep_health_reports_what_needs_a_person(env) -> None:  # type: ignore[no-untyped-def]
+    from datetime import UTC, datetime, timedelta
+
+    c = env()
+    r = c.get("/health/deep")
+    body = r.json()
+    assert body["checks"]["database"] is True and body["checks"]["schema_current"] is True
+    with service_session() as s:
+        t = s.scalar(select(Tenant).where(Tenant.slug == "demo-hvac"))
+        assert t is not None
+        stuck = Job(
+            tenant_id=t.id,
+            kind="noop",
+            payload={},
+            run_after=datetime.now(UTC) - timedelta(hours=1),
+        )
+        s.add(stuck)
+        s.flush()
+        stuck_id = stuck.id
+    try:
+        r = c.get("/health/deep")
+        assert r.status_code == 503 and r.json()["checks"]["stuck_jobs"] >= 1
+    finally:
+        with service_session() as s:
+            s.get(Job, stuck_id).state = "done"  # type: ignore[union-attr]

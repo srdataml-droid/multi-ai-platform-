@@ -67,7 +67,12 @@ def shop(migrated: str) -> dict[str, Any]:
             slug=f"alert-{uuid.uuid4().hex[:8]}",
             pack_id="hvac",
             status="active",
-            settings=dict(demo.settings),
+            # Web chat only: sharing demo-hvac's SMS number or inbound address would make
+            # inbound routing ambiguous for every later test.
+            settings={
+                **demo.settings,
+                "channels": {"webchat": demo.settings["channels"]["webchat"]},
+            },
         )
         s.add(t)
         s.flush()

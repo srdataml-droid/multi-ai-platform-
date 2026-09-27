@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { exitTenant, getToken, setToken } from "@/lib/auth";
 import { setBusinessTimeZone } from "@/lib/format";
+import { every } from "@/lib/every";
 
 type Me = {
   email: string;
@@ -54,9 +55,9 @@ export function Nav() {
     api<Pack>("/pack").then(setPack).catch(() => null);
     const load = () => api<{ count: number }>("/approvals").then((d) => setAwaiting(d.count)).catch(() => null);
     load();
-    const id = setInterval(load, 5000);
+    const stop = every(load, 5000);
     return () => {
-      clearInterval(id);
+      stop();
       window.removeEventListener(TENANT_CHANGED, loadMe);
     };
   }, [router]);

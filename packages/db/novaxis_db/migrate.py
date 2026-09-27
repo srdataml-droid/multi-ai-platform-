@@ -41,14 +41,17 @@ def _connect_args(url: str) -> dict[str, object]:
     return {"prepare_threshold": None} if "psycopg" in url else {}
 
 
+def head(url: str) -> str | None:
+    return ScriptDirectory.from_config(_config(url)).get_current_head()
+
+
 def ensure_schema(url: str) -> bool:
     """Bring the database to head if it is behind. Returns True if anything ran.
 
     Called when a new API deployment starts (NOVAXIS_AUTO_MIGRATE), so new code never
     serves requests against the previous schema. Concurrent callers are serialised by the
     lock in env.py."""
-    head = ScriptDirectory.from_config(_config(url)).get_current_head()
-    if current(url) == head:
+    if current(url) == head(url):
         return False
     upgrade(url, "head")
     return True

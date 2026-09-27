@@ -1,6 +1,6 @@
 # Architecture: Novaxis AI Worker Platform
 
-> Status: v0.1, pre-build. Every section names the chunk in `docs/BUILD-PLAN.md` that implements it.
+> Status: v0.2, live demo on Vercel. Every section names the chunk in `docs/BUILD-PLAN.md` that implements it.
 
 ## 1. Goals and non-goals
 
@@ -8,7 +8,7 @@
 - One core, many tenants, three vertical packs. Adding a fourth pack must not touch `packages/core`.
 - Every customer-facing outcome is measurable: response time, intake completion, bookings, recovered missed contacts, staff minutes saved.
 - A human can take over any conversation at any moment and see exactly what the worker did and why.
-- Runs for one tenant on a free-tier Supabase project and one small Railway service. Scales by adding worker processes, not by rewriting.
+- Runs for one tenant on a free-tier Supabase project and two Vercel projects (web and API). Scales by adding worker processes, not by rewriting.
 
 **Non-goals for Phase 1**
 - Voice calls (Phase 3). Text channels prove the loop first.
@@ -232,17 +232,19 @@ Built into code, not policy documents:
 - `evals/<pack>/*.yaml`: a starting conversation, the customer's scripted turns, and the expected proposals and forbidden proposals. `make evals` runs each through the real worker code with the LLM and prints pass rate. A pack must hold 90 percent before it is enabled for a paying tenant. Thresholds live in `evals/thresholds.yaml` and CI fails below them.
 - Metrics roll-up job runs hourly into `metrics_daily`. The dashboard reads only the roll-up.
 
-## 13. Deployment (Chunk 2, 14)
+## 13. Deployment (Chunk 2, 14; hosting per ADR 0013)
 
-- **Local**: `docker compose up` with Postgres 16, api, worker, web. Mailpit for email, Twilio dev webhooks via ngrok when needed.
-- **Staging**: one Railway (or Render) project with `api` and `worker` services from the same Dockerfile and different start commands; Supabase project `novaxis-staging`; Vercel preview for web.
-- **Production**: same shape, `novaxis-prod-uk` first. Secrets in the platform's variable store. Migrations run as a release command, never on container start.
-- **CI**: GitHub Actions. Lint, type check, unit tests, RLS test, evals with a small LLM budget on a nightly schedule only.
+- **Local**: `docker compose up` with Postgres 16, api, worker, web. Mailpit for email, Twilio dev webhooks via ngrok when needed. The `apps/worker` process runs here.
+- **Production**: Vercel project `novaxis-web` (Next.js) and `novaxis-api` (FastAPI as one Python function, London `lhr1`); Supabase project `novaxis-worker` (London). There is no worker process: with `NOVAXIS_INLINE_WORKER=true` the API drains the job queue after each POST or PUT, and Supabase `pg_cron` calls `POST /internal/tick` every minute for scheduled work, reading the shared secret from Supabase Vault. Migrations run when a new deployment first starts (`NOVAXIS_AUTO_MIGRATE`, advisory lock), so they must stay additive. Secrets live in Vercel project variables.
+- **Previews**: Vercel previews behind Vercel Authentication, against the same database. There is no separate staging database yet.
+- **Release**: CI promotes a commit to the `production` branch only after lint, types, unit, RLS and browser tests pass. Vercel's production branch must be set to `production` for that to gate the live site (a dashboard setting; see `docs/RUNBOOK.md`).
+- **Monitoring**: `GET /health/deep` (database, stuck and failed jobs, undelivered emergency alerts, schema at head), checked every 15 minutes by `.github/workflows/monitor.yml`. Incident steps are in `docs/RUNBOOK.md`.
+- **CI**: GitHub Actions. Lint, type check, unit tests, RLS test, browser tests on every push.
 
 ## 14. Cost shape
 
 No prices in this document (they change and must be verified). The shape:
-- Fixed per month: Supabase, one small API service, one small worker service, Vercel, Langfuse, Sentry free tiers to start.
+- Fixed per month: Supabase, Vercel (web and API), Langfuse, Sentry free tiers to start.
 - Variable per tenant: LLM tokens (dominated by worker turns, so keep contexts short), SMS segments, phone numbers, email volume.
 - The metering table `usage_events` (Chunk 14) records tokens, messages and minutes per tenant so pricing can be set from real numbers after the pilot.
 

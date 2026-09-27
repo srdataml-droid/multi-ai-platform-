@@ -18,6 +18,7 @@ from novaxis_api.routes_billing import router as billing_router
 from novaxis_api.routes_bridge import router as bridge_router
 from novaxis_api.routes_conversations import router as conversations_router
 from novaxis_api.routes_dashboard import router as dashboard_router
+from novaxis_api.routes_health import router as health_router
 from novaxis_api.routes_inbound import router as inbound_router
 from novaxis_api.routes_integrations import router as integrations_router
 from novaxis_api.routes_internal import router as internal_router
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
         return build_info()
 
     app.include_router(me_router)
+    app.include_router(health_router)
     app.include_router(alerts_router)
     app.include_router(inbound_router)
     app.include_router(approvals_router)
@@ -74,9 +76,10 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def widget_cors(request: Request, call_next):  # type: ignore[no-untyped-def]
         # The chat widget runs on each business's own website and calls these routes from
-        # that origin. They carry no cookies and no staff token, so any origin may call them;
-        # per-tenant origin allow-lists come with Chunk 12. Every other route stays
-        # same-origin only (the dashboard reaches the API through the web app's /api proxy).
+        # that origin. They carry no cookies and no staff token, so CORS allows any origin;
+        # a business's own allow-list (`widget_origins`) is checked in the route. Every other
+        # route stays same-origin only (the dashboard reaches the API through the web app's
+        # /api proxy).
         if not request.url.path.startswith(WIDGET_PREFIX):
             return await call_next(request)
         if request.method == "OPTIONS":

@@ -109,7 +109,11 @@ def test_failing_job_backs_off_then_hands_to_human(hvac: Tenant) -> None:
         assert audit is not None
     # Handing over queues one staff alert; after it, nothing: the failed job is never retried.
     with service_session() as s:
-        alert = s.scalar(select(Job).where(Job.tenant_id == hvac.id, Job.kind == "alert_staff"))
+        alert = s.scalar(
+            select(Job).where(
+                Job.tenant_id == hvac.id, Job.kind == "alert_staff", Job.state == "queued"
+            )
+        )
         assert alert is not None and alert.state == "queued"
     handlers = {**handlers, "alert_staff": build_handlers(get_pack, FakeLLM())["alert_staff"]}
     assert tick(handlers, "w1"), "the alert runs"

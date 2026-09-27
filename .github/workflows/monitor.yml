@@ -1,0 +1,20 @@
+name: monitor
+# Free uptime and health monitoring. GitHub emails the repository owner when a scheduled
+# run fails, so a failed check here is an alert. See docs/RUNBOOK.md for what to do.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: API deep health (database, schema, stuck jobs, undelivered emergency alerts)
+        run: |
+          code=$(curl -s -o body.json -w "%{http_code}" --max-time 30 https://novaxis-api.vercel.app/health/deep)
+          cat body.json; echo
+          test "$code" = "200"
+      - name: Dashboard answers
+        run: curl -fsS --max-time 30 -o /dev/null https://novaxis-web.vercel.app/login

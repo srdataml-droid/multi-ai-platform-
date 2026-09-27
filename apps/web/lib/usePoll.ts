@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { every } from "./every";
 
 // Polling instead of Realtime for now (ADR 0012): simple, works with our own RLS role.
 export function usePoll<T>(path: string | null, intervalMs = 5000) {
@@ -17,10 +18,10 @@ export function usePoll<T>(path: string | null, intervalMs = 5000) {
         .then((d) => alive && (setData(d), setError(null)))
         .catch((e: Error) => alive && setError(e.message));
     load();
-    const id = setInterval(load, intervalMs);
+    const stop = every(load, intervalMs);
     return () => {
       alive = false;
-      clearInterval(id);
+      stop();
     };
   }, [path, intervalMs, tick]);
   return { data, error, refresh };

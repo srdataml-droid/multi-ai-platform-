@@ -1,6 +1,6 @@
 """Appointment executors. propose offers held slots; confirm writes the booking;
-reschedule moves it; cancel releases it. All go through the system of record and
-are idempotent on the proposal id."""
+reschedule offers held slots to move to (confirming one moves the booking); cancel releases
+it. All go through the system of record and are idempotent on the proposal id."""
 
 from __future__ import annotations
 
@@ -78,13 +78,13 @@ def reschedule_appointment(
     appt = _appt(session, params)
     if appt is None:
         return ExecResult(False, {}, "appointment not found")
+    conv_id = proposal.conversation_id or appt.conversation_id
+    conv = session.get(Conversation, conv_id) if conv_id else None
+    if conv is None:
+        return ExecResult(False, {}, "conversation not found")
     sor = system_of_record(session, tenant)
-    appt = scheduling.reschedule(
-        session, tenant, sor, resolve_pack(tenant.pack_id), appt, params.new_window
-    )
-    return ExecResult(
-        True, {"appointment_id": str(appt.id), "starts_at": appt.starts_at.isoformat()}
-    )
+    held = scheduling.offer_moves(session, tenant, sor, appt, conv, params.new_window, proposal.id)
+    return ExecResult(True, {"appointment_id": str(appt.id), "offered": len(held)})
 
 
 @executor("cancel_appointment")

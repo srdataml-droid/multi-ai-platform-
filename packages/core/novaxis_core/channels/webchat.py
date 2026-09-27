@@ -3,7 +3,7 @@
 Verification: the widget is public code, so there is no secret to check. What we
 verify is the *visitor token*, an HMAC-signed visitor id we minted, so a returning
 visitor threads into the same conversation and nobody can forge another visitor's
-id. Origin allow-listing and rate limits arrive in Chunk 12.
+id. Allowed websites and rate limits are enforced in the API route (`routes_inbound`).
 """
 
 from __future__ import annotations

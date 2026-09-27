@@ -47,7 +47,7 @@ skipped, even in demos.
 | Auth | Supabase Auth, one `tenant_id` claim per user | Ships with the database |
 | Messaging | Twilio for SMS and voice, Resend or SMTP for email, Meta WhatsApp Cloud API later | Standard, documented |
 | Payments | Stripe subscriptions plus metered usage | Standard |
-| Hosting | API and worker on Railway or Render, web on Vercel, Postgres on Supabase | Founder already deploys here |
+| Hosting | Web and API on Vercel (two projects), jobs run inline in the API plus a once-a-minute Supabase `pg_cron` timer, Postgres on Supabase London. No separate worker service in production (ADR 0013) | Founder already deploys here; one fewer service to run |
 | Observability | Langfuse (self-hosted or cloud) for LLM traces, structured JSON logs, Sentry | Debug conversations, not guess |
 | Tests | pytest, pytest-asyncio, Playwright for the web, golden-conversation evals in `evals/` | Nothing merges red |
 

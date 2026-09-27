@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.billing import trial_block_reason
+from novaxis_core.contacts import merge, possible_duplicates
 from novaxis_core.llm import build_llm
 from novaxis_core.models import (
     ActionProposal,
@@ -194,6 +195,7 @@ def contacts(
         )
     rows = list(session.scalars(stmt))
     staff = principal.role in STAFF
+    dupes = possible_duplicates(session, rows) if staff else {}
     return {
         "items": [
             {
@@ -203,10 +205,38 @@ def contacts(
                 "emails": c.emails if staff else ["hidden"] * len(c.emails),
                 "consent": c.consent.get("status"),
                 "created_at": c.created_at.isoformat(),
+                "possible_duplicates": [
+                    {"id": str(d.id), "display_name": d.display_name or "Unknown"}
+                    for d in dupes.get(c.id, [])
+                ],
             }
             for c in rows
         ]
     }
+
+
+class MergeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    into: uuid.UUID
+
+
+@router.post("/contacts/{contact_id}/merge")
+def merge_contact(
+    contact_id: uuid.UUID, body: MergeBody, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Staff confirm that two contacts are the same person. The one merged into keeps its
+    record; the other's conversations and bookings move to it."""
+    if principal.role not in STAFF:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "staff only")
+    drop = session.get(Contact, contact_id)
+    keep = session.get(Contact, body.into)
+    if drop is None or keep is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contact not found")
+    try:
+        merge(session, principal.tenant_id, keep, drop, f"user:{principal.user_id}")
+    except ValueError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+    return {"id": str(keep.id)}
 
 
 @router.get("/analytics")

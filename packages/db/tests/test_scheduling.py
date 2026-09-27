@@ -379,3 +379,100 @@ def test_empty_window_is_widened_to_next_available(dental: Tenant, cal: FakeCale
         assert offer is not None and offer.body.startswith(
             "There's nothing free at the time you asked for"
         )
+
+
+def test_reschedule_offers_choices_and_moves_the_booking_the_customer_picks(
+    dental: Tenant, cal: FakeCalendar
+) -> None:
+    conv_id, contact_id = _conv(dental)
+    day = _next_weekday_9am() + timedelta(days=7)
+    with tenant_session(dental.id) as s:
+        p = ActionProposal(
+            tenant_id=dental.id,
+            conversation_id=conv_id,
+            kind="confirm_appointment",
+            params={},
+            risk="low",
+            state="auto_approved",
+        )
+        s.add(p)
+        s.flush()
+        appt = Appointment(
+            tenant_id=dental.id,
+            contact_id=contact_id,
+            conversation_id=conv_id,
+            proposal_id=p.id,
+            starts_at=day.astimezone(UTC),
+            ends_at=(day + timedelta(minutes=20)).astimezone(UTC),
+            service_code="checkup",
+            status="held",
+        )
+        s.add(appt)
+        s.flush()
+        scheduling.confirm(s, dental, cal, get_pack("dental"), appt, p.id)
+        aid, ref, original = appt.id, appt.external_ref, appt.starts_at
+    with tenant_session(dental.id) as s:
+        rp = ActionProposal(
+            tenant_id=dental.id,
+            conversation_id=conv_id,
+            kind="reschedule_appointment",
+            params={"appointment_id": str(aid), "new_window": "next week"},
+            risk="medium",
+            state="approved",
+        )
+        s.add(rp)
+        s.flush()
+        res = execute(s, dental, rp)
+        assert res.ok and res.result["offered"] == 3, res.error
+        appt = s.get(Appointment, aid)
+        assert appt is not None and appt.starts_at == original, "nothing moves until they pick"
+        offer = s.scalars(
+            select(Message)
+            .where(Message.conversation_id == conv_id, Message.direction == "outbound")
+            .order_by(Message.created_at.desc())
+        ).first()
+        assert offer is not None and "1. " in offer.body and "current booking" in offer.body
+        held = scheduling.offered_for(s, s.get(Conversation, conv_id))  # type: ignore[arg-type]
+        assert len(held) == 3
+        assert f"appointment_id={aid}" in scheduling.appointments_block(
+            s,
+            dental,
+            s.get(Conversation, conv_id),  # type: ignore[arg-type]
+        ), "the model is told these times would move the booking"
+        chosen, chosen_at = held[1].id, held[1].starts_at
+        cp = ActionProposal(
+            tenant_id=dental.id,
+            conversation_id=conv_id,
+            kind="confirm_appointment",
+            params={"appointment_id": str(chosen), "service_code": "checkup"},
+            risk="medium",
+            state="approved",
+        )
+        s.add(cp)
+        s.flush()
+        res = execute(s, dental, cp)
+        assert res.ok, res.error
+    with tenant_session(dental.id) as s:
+        appt = s.get(Appointment, aid)
+        assert appt is not None and appt.status == "confirmed"
+        assert appt.starts_at == chosen_at and appt.external_ref == ref
+        assert cal.calls.count("create") == 1 and cal.calls.count("update") == 1
+        assert len(cal.events) == 1, "one booking in the diary, at the new time"
+        live = list(
+            s.scalars(
+                select(Appointment).where(
+                    Appointment.conversation_id == conv_id,
+                    Appointment.status.in_(("held", "confirmed")),
+                )
+            )
+        )
+        assert [a.id for a in live] == [aid], "every offered time is released"
+        bodies = [
+            m.body
+            for m in s.scalars(
+                select(Message).where(
+                    Message.conversation_id == conv_id, Message.direction == "outbound"
+                )
+            )
+        ]
+        assert any(b.startswith("Moved: Check-up is now") for b in bodies)

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
 import { api, post, put } from "@/lib/api";
+import { every } from "@/lib/every";
 import { when } from "@/lib/format";
 
 export type Ticket = { id: string; ref: string; action: "create" | "update" | "cancel"; starts_at: string; ends_at: string; summary: string; status: string; service_name: string; customer_name: string; customer_phone: string; created_at: string; entered_at: string | null };
@@ -118,8 +119,7 @@ export function HandoffsCard() {
   const load = () => api<Bridge>("/integrations/bridge").then(setB).catch((e: Error) => setErr(e.message));
   useEffect(() => {
     load();
-    const id = setInterval(load, 10000);
-    return () => clearInterval(id);
+    return every(load, 10000);
   }, []);
   if (!b || (!b.connected && !b.tickets.length)) return <ErrorLine error={err} />;
   const open = b.tickets.filter((t) => t.status !== "entered");

@@ -171,3 +171,62 @@ def test_dev_login_widget_and_analytics(client: TestClient) -> None:
     assert 'data-tenant="demo-hvac"' in w["snippet"] and "widget.js" in w["snippet"]
     a = client.get("/analytics", headers=_h()).json()
     assert set(a["totals"]) >= {"inbound", "bookings_approved"}
+
+
+def test_same_person_on_chat_and_sms_is_flagged_and_staff_merge(client: TestClient) -> None:
+    from novaxis_core.models import Appointment, Contact
+
+    with service_session() as s:
+        t = s.scalar(select(Tenant).where(Tenant.slug == "demo-hvac"))
+        assert t is not None
+        s.expunge(t)
+    phone = f"+4477009{uuid.uuid4().int % 100000:05d}"
+    with tenant_session(t.id) as s:
+        sms = ingest(
+            s,
+            t,
+            NormalisedInbound(
+                channel="twilio_sms",
+                provider_ref=f"SM{uuid.uuid4().hex}",
+                tenant_ref="demo-hvac",
+                sender_phone=phone,
+                body="boiler is leaking",
+            ),
+        )
+    chat_conv = _conv("I texted earlier about my boiler")
+    with tenant_session(t.id) as s:
+        conv = s.get(Conversation, chat_conv)
+        assert conv is not None
+        # Typed the way people type it: national format with spaces.
+        conv.extracted = {**conv.extracted, "phone": "0" + phone[3:7] + " " + phone[7:]}
+        chat_contact = conv.contact_id
+    rows = {r["id"]: r for r in client.get("/contacts", headers=_h()).json()["items"]}
+    flagged = rows[str(chat_contact)]["possible_duplicates"]
+    assert [d["id"] for d in flagged] == [str(sms.contact_id)], "flagged, not merged"
+    with tenant_session(t.id) as s:
+        assert s.get(Contact, chat_contact).merged_into is None  # type: ignore[union-attr]
+    url = f"/contacts/{chat_contact}/merge"
+    body = {"into": str(sms.contact_id)}
+    assert client.post(url, json=body, headers=_h("dev|viewer@demo-hvac")).status_code == 403
+    assert client.post(url, json=body, headers=_h()).status_code == 200
+    assert client.post(url, json=body, headers=_h()).status_code == 409, "only once"
+    with tenant_session(t.id) as s:
+        keep = s.get(Contact, sms.contact_id)
+        assert keep is not None and s.get(Conversation, chat_conv).contact_id == keep.id  # type: ignore[union-attr]
+        assert len(keep.visitor_ids) == 1, "the chat visitor now threads to the same person"
+        assert s.scalar(select(Appointment).where(Appointment.contact_id == chat_contact)) is None
+    ids = [r["id"] for r in client.get("/contacts", headers=_h()).json()["items"]]
+    assert str(chat_contact) not in ids and str(sms.contact_id) in ids
+
+
+def test_phone_numbers_are_normalised_for_matching() -> None:
+    from novaxis_core.contacts import normalize_email, normalize_phone
+
+    assert normalize_phone("07700 900123") == "+447700900123"
+    assert normalize_phone("+44 (0)7700-900123") == "+447700900123"
+    assert normalize_phone("447700900123") == "+447700900123"
+    assert normalize_phone("+1 415 555 0100") == "+14155550100"
+    assert normalize_phone("next tuesday") is None
+    assert normalize_phone("12345") is None
+    assert normalize_email(" Jo@Example.co.uk ") == "jo@example.co.uk"
+    assert normalize_email("not an email") is None

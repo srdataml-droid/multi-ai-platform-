@@ -23,7 +23,10 @@ def outbound_first_contact(
 def write_to_vendor_system(
     session: Session, tenant: Tenant, proposal: ActionProposal, params: Any
 ) -> ExecResult:
-    raise NotImplementedError("vendor integrations arrive in Chunk 11")
+    raise NotImplementedError(
+        "bookings reach a vendor diary through the calendar or the booking bridge, "
+        "not through this action"
+    )
 
 
 @executor("collect_payment")
@@ -39,6 +42,4 @@ def collect_payment(
 def quote_price(
     session: Session, tenant: Tenant, proposal: ActionProposal, params: Any
 ) -> ExecResult:
-    raise NotImplementedError(
-        "price quoting from a tenant price list arrives with the dashboard (Chunk 9)"
-    )
+    raise NotImplementedError("prices are quoted by staff; the worker has no price list yet")

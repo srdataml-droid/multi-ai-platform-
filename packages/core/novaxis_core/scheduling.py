@@ -23,7 +23,16 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from novaxis_core.models import Appointment, AuditLog, Contact, Conversation, Job, Location, Tenant
+from novaxis_core.models import (
+    ActionProposal,
+    Appointment,
+    AuditLog,
+    Contact,
+    Conversation,
+    Job,
+    Location,
+    Tenant,
+)
 from novaxis_core.settings import get_settings
 from novaxis_core.sor import Slot, SystemOfRecord, overlaps
 
@@ -279,6 +288,12 @@ def appointments_block(session: Session, tenant: Tenant, conv: Conversation) -> 
         lines += [
             f"{i + 1}: {fmt(a.starts_at, tz)}, appointment_id={a.id}" for i, a in enumerate(held)
         ]
+        moving = replaced_by_hold(session, held[0])
+        if moving is not None:
+            lines.append(
+                f"These would move the booking at {fmt(moving.starts_at, tz)} "
+                f"(appointment_id={moving.id}); confirming one moves it, nothing is added."
+            )
         lines.append("If the customer picks one, call confirm_appointment with its appointment_id.")
     if confirmed:
         lines.append("Confirmed appointments (time, appointment_id):")
@@ -397,6 +412,9 @@ def confirm(
             raise RuntimeError("hold expired and the slot has since been taken")
     if appt.status not in ("held", "proposed"):
         raise RuntimeError(f"cannot confirm an appointment in state {appt.status}")
+    moving = replaced_by_hold(session, appt)
+    if moving is not None:
+        return _move_to_hold(session, tenant, sor, pack, moving, appt)
     location = session.get(Location, appt.location_id) if appt.location_id else None
     contact = session.get(Contact, appt.contact_id)
     conv = session.get(Conversation, appt.conversation_id) if appt.conversation_id else None
@@ -477,41 +495,106 @@ def cancel(
     return appt
 
 
-def reschedule(
+def replaced_by_hold(session: Session, hold_row: Appointment) -> Appointment | None:
+    """The confirmed booking a held time was offered to replace, if it was offered by a
+    reschedule and that booking is still confirmed."""
+    if hold_row.proposal_id is None:
+        return None
+    prop = session.get(ActionProposal, hold_row.proposal_id)
+    if prop is None or prop.kind != "reschedule_appointment":
+        return None
+    try:
+        old = session.get(Appointment, uuid.UUID(str(prop.params.get("appointment_id"))))
+    except ValueError:
+        return None
+    return old if old is not None and old.status == "confirmed" else None
+
+
+def offer_moves(
+    session: Session,
+    tenant: Tenant,
+    sor: SystemOfRecord,
+    appt: Appointment,
+    conv: Conversation,
+    new_window_text: str,
+    proposal_id: uuid.UUID,
+) -> list[Appointment]:
+    """Hold a few times in the asked-for window (or the next free ones) and offer them. The
+    booking moves only when the customer picks one and that choice is confirmed; until then
+    the original time stands."""
+    if appt.status != "confirmed":
+        raise RuntimeError(f"cannot reschedule an appointment in state {appt.status}")
+    contact = session.get(Contact, appt.contact_id)
+    if contact is None:
+        raise RuntimeError("contact not found")
+    location = session.get(Location, appt.location_id) if appt.location_id else None
+    tz = tz_for(tenant, location)
+    window = parse_window(new_window_text, tz)
+    slots = availability(session, tenant, sor, appt.service_code, window)
+    widened = False
+    if not slots:
+        window = widen(window)
+        slots = availability(session, tenant, sor, appt.service_code, window)
+        widened = True
+    held = hold(session, tenant, contact, conv, appt.service_code, slots, proposal_id)
+    name = str(_service(tenant, appt.service_code).get("name", appt.service_code))
+    if held:
+        text = (
+            offer_text(tenant, tz, held, name, widened).replace(
+                "Here are the times the team can offer",
+                f"Your current booking is {fmt(appt.starts_at, tz)}. Here are the times the team "
+                "can offer instead",
+            )
+            + " Your current booking stands until then."
+        )
+    else:
+        text = offer_text(tenant, tz, held, name, widened) + (
+            f" Your current booking for {fmt(appt.starts_at, tz)} still stands."
+        )
+    _enqueue_send(session, tenant, conv, text)
+    return held
+
+
+def _move_to_hold(
     session: Session,
     tenant: Tenant,
     sor: SystemOfRecord,
     pack: Any,
     appt: Appointment,
-    new_window_text: str,
+    chosen: Appointment,
 ) -> Appointment:
-    if appt.status != "confirmed":
-        raise RuntimeError(f"cannot reschedule an appointment in state {appt.status}")
-    location = session.get(Location, appt.location_id) if appt.location_id else None
-    tz = tz_for(tenant, location)
-    window = parse_window(new_window_text, tz)
-    slots = availability(session, tenant, sor, appt.service_code, window, limit=1)
-    if not slots:
-        raise RuntimeError("no availability in the requested window")
-    slot = slots[0]
+    """Move a confirmed booking to the time the customer picked, in the system of record
+    too, and release every hold offered with it. Returns the moved booking."""
     if appt.external_ref:
         provider, _, ref = appt.external_ref.partition(":")
         from novaxis_core.sor import ExternalRef
 
-        sor.update_booking(ExternalRef(provider, ref), slot)
+        sor.update_booking(ExternalRef(provider, ref), Slot(chosen.starts_at, chosen.ends_at))
     old = appt.starts_at
-    appt.starts_at, appt.ends_at = slot.starts_at, slot.ends_at
+    for h in session.scalars(
+        select(Appointment).where(
+            Appointment.proposal_id == chosen.proposal_id, Appointment.status == "held"
+        )
+    ):
+        h.status = "cancelled"
+    session.flush()
+    appt.starts_at, appt.ends_at = chosen.starts_at, chosen.ends_at
+    appt.customer_confirmed_at = None
     cancel_appointment_steps(session, appt)
     session.flush()
     _audit(session, tenant, "appointment.rescheduled", appt, from_=old, to=appt.starts_at)
-    conv = session.get(Conversation, appt.conversation_id) if appt.conversation_id else None
+    conv_id = chosen.conversation_id or appt.conversation_id
+    conv = session.get(Conversation, conv_id) if conv_id else None
     if conv is not None:
+        location = session.get(Location, appt.location_id) if appt.location_id else None
+        tz = tz_for(tenant, location)
         svc = _service(tenant, appt.service_code)
         _enqueue_send(
             session,
             tenant,
             conv,
-            f"Moved: {svc.get('name', appt.service_code)} is now {fmt(appt.starts_at, tz)}.",
+            f"Moved: {svc.get('name', appt.service_code)} is now {fmt(appt.starts_at, tz)} "
+            f"with {tenant.name}.",
         )
         schedule_appointment_steps(session, tenant, pack, appt, conv)
     return appt

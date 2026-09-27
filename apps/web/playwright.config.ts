@@ -14,11 +14,14 @@ export default defineConfig({
     // Environments with a pre-installed chromium set PW_CHROMIUM_PATH instead of downloading one.
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
+  // CI tests the production build, which is what users get: no on-demand page compiles
+  // (a source of first-visit timeouts) and the production security headers. Locally the
+  // dev server keeps edits live.
   webServer: {
-    command: "npm run dev",
+    command: process.env.CI ? "npm run build && npm run start" : "npm run dev",
     url: "http://localhost:3000/login",
-    reuseExistingServer: true,
-    timeout: 120_000,
+    reuseExistingServer: !process.env.CI,
+    timeout: process.env.CI ? 300_000 : 120_000,
     env: { NOVAXIS_API_URL: process.env.NOVAXIS_API_URL ?? "http://localhost:8000" },
   },
 });
