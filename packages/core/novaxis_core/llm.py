@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
+
+import httpx
 
 from novaxis_core.settings import get_settings
 
@@ -170,6 +173,126 @@ def parse_response(response: Any, latency_ms: int = 0) -> LLMResult:
     )
 
 
+_THINK = re.compile(r"<think>.*?(</think>|$)", re.DOTALL | re.IGNORECASE)
+_FINISH = {"stop": "end_turn", "tool_calls": "tool_use", "length": "max_tokens"}
+
+
+class OpenAICompatLLM:
+    """Open-source and low-cost models through the OpenAI-compatible chat API.
+
+    Ollama (local), vLLM (self-hosted) and most hosted open-model services speak this
+    format, so changing model or provider is three settings and no code:
+    NOVAXIS_LLM_BASE_URL, NOVAXIS_MODEL_WORKER (and _CLASSIFY, _SUMMARISE),
+    NOVAXIS_LLM_API_KEY.
+
+    What is different from the Anthropic path, on purpose:
+    - No prompt caching: the stable and volatile system text are sent as one system message.
+    - Tool schemas are sent without `strict`, which many servers reject. The approval gate
+      validates every tool input against its schema anyway, so a malformed call is
+      refused there, never executed.
+    - Reasoning models may put their thinking in the reply as <think>...</think>; it is
+      removed, because it must never reach a customer.
+    """
+
+    def __init__(self, transport: httpx.BaseTransport | None = None) -> None:
+        s = get_settings()
+        self._base = s.llm_base_url.rstrip("/")
+        self._retries = s.llm_max_retries
+        headers = {"Content-Type": "application/json"}
+        if s.llm_api_key:
+            headers["Authorization"] = f"Bearer {s.llm_api_key}"
+        self._client = httpx.Client(
+            timeout=s.llm_timeout_seconds, headers=headers, transport=transport
+        )
+
+    def complete(
+        self,
+        *,
+        task: Task,
+        system_stable: str,
+        system_volatile: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 1024,
+    ) -> LLMResult:
+        system = system_stable if not system_volatile else f"{system_stable}\n\n{system_volatile}"
+        body: dict[str, Any] = {
+            "model": model_for(task),
+            "max_tokens": max_tokens,
+            "messages": [{"role": "system", "content": system}, *messages],
+        }
+        if tools:
+            body["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t["input_schema"],
+                    },
+                }
+                for t in tools
+            ]
+            body["tool_choice"] = "auto"
+        started = time.monotonic()
+        data = self._post(body)
+        return parse_openai_response(data, int((time.monotonic() - started) * 1000))
+
+    def _post(self, body: dict[str, Any]) -> dict[str, Any]:
+        """POST with retries on rate limits, server errors and dropped connections only."""
+        url = f"{self._base}/chat/completions"
+        for attempt in range(self._retries + 1):
+            last = attempt == self._retries
+            try:
+                r = self._client.post(url, json=body)
+            except httpx.TransportError:
+                if last:
+                    raise
+                time.sleep(min(2**attempt, 8))
+                continue
+            if r.status_code == 429 or r.status_code >= 500:
+                if last:
+                    r.raise_for_status()
+                wait = r.headers.get("retry-after", "")
+                time.sleep(min(float(wait) if wait.isdigit() else 2**attempt, 20))
+                continue
+            r.raise_for_status()
+            result: dict[str, Any] = r.json()
+            return result
+        raise RuntimeError("unreachable")
+
+
+def parse_openai_response(data: dict[str, Any], latency_ms: int = 0) -> LLMResult:
+    choice = (data.get("choices") or [{}])[0]
+    message = choice.get("message") or {}
+    text = _THINK.sub("", str(message.get("content") or "")).strip()
+    calls: list[ToolCall] = []
+    for i, tc in enumerate(message.get("tool_calls") or []):
+        fn = tc.get("function") or {}
+        raw = fn.get("arguments") or "{}"
+        try:
+            args = raw if isinstance(raw, dict) else json.loads(raw)
+        except json.JSONDecodeError:
+            log.warning("llm: dropped tool call %s with invalid JSON arguments", fn.get("name"))
+            continue
+        if not isinstance(args, dict) or not fn.get("name"):
+            continue
+        calls.append(ToolCall(name=str(fn["name"]), input=args, id=str(tc.get("id") or f"c{i}")))
+    usage = data.get("usage") or {}
+    finish = choice.get("finish_reason")
+    return LLMResult(
+        text=text,
+        tool_calls=calls,
+        model=str(data.get("model", "")),
+        stop_reason=_FINISH.get(str(finish), finish),
+        input_tokens=int(usage.get("prompt_tokens") or 0),
+        output_tokens=int(usage.get("completion_tokens") or 0),
+        cache_read_tokens=int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0),
+        latency_ms=latency_ms,
+        request_id=data.get("id"),
+    )
+
+
 class FakeLLM:
     """Scripted answers for tests and offline demos.
 
@@ -228,7 +351,22 @@ def build_llm() -> LLMClient:
     s = get_settings()
     if s.llm_provider == "fake":
         return FakeLLM(script=script_from_env())
-    return AnthropicLLM()
+    if s.llm_provider == "openai_compatible":
+        claude = [
+            m
+            for m in (s.model_worker, s.model_classify, s.model_summarise)
+            if m.startswith("claude-")
+        ]
+        if claude:
+            raise RuntimeError(
+                "NOVAXIS_LLM_PROVIDER=openai_compatible needs open-model names: set "
+                "NOVAXIS_MODEL_WORKER, NOVAXIS_MODEL_CLASSIFY and NOVAXIS_MODEL_SUMMARISE "
+                f"(still set to {', '.join(claude)})"
+            )
+        return OpenAICompatLLM()
+    if s.llm_provider == "anthropic":
+        return AnthropicLLM()
+    raise RuntimeError(f"unknown NOVAXIS_LLM_PROVIDER {s.llm_provider!r}")
 
 
 def script_from_env() -> list[tuple[str, list[ToolCall]]]:

@@ -79,8 +79,11 @@ class Settings(BaseSettings):
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     # LLM. "anthropic" uses the SDK (credentials from ANTHROPIC_API_KEY or an `ant auth`
-    # profile); "fake" uses scripted responses for tests and offline demos.
+    # profile); "openai_compatible" talks to any OpenAI-style chat API (Ollama, vLLM, hosted
+    # open models) at llm_base_url; "fake" uses scripted responses for tests and demos.
     llm_provider: str = "anthropic"
+    llm_base_url: str = "http://localhost:11434/v1"  # Ollama's default
+    llm_api_key: str = ""
     model_worker: str = "claude-sonnet-5"
     model_classify: str = "claude-haiku-4-5"
     model_summarise: str = "claude-haiku-4-5"

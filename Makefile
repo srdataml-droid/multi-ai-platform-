@@ -25,7 +25,7 @@ typecheck:     ## mypy strict on core + tsc on web
 evals:         ## Golden-conversation evals with the scripted model (deterministic)
 	uv run python evals/run.py
 
-evals-real:    ## Same evals against the real model (needs ANTHROPIC_API_KEY)
+evals-real:    ## Same evals against the configured real model (NOVAXIS_LLM_PROVIDER, see docs/models.md)
 	uv run python evals/run.py --real
 
 migrate:       ## alembic upgrade head

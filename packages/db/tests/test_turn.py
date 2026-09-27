@@ -474,3 +474,66 @@ def test_first_reply_links_the_business_privacy_notice(hvac: Tenant) -> None:
         reply = s.get(Message, r.reply_message_id)
         assert reply is not None
         assert "https://example.co.uk/privacy" in reply.body.split("\n\n")[0]
+
+
+def test_a_full_turn_runs_on_an_open_model(hvac: Tenant, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same worker turn, gate and proposals, with an OpenAI-compatible model."""
+    import json
+
+    import httpx
+
+    from novaxis_core.llm import OpenAICompatLLM
+    from novaxis_core.settings import get_settings
+
+    for k, v in {
+        "NOVAXIS_LLM_BASE_URL": "http://models.test/v1",
+        "NOVAXIS_MODEL_WORKER": "open-worker",
+    }.items():
+        monkeypatch.setenv(k, v)
+    get_settings.cache_clear()
+    sent: list[dict] = []  # type: ignore[type-arg]
+
+    def model(req: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(req.content))
+        return httpx.Response(
+            200,
+            json={
+                "model": "open-worker",
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "content": "<think>plan</think>I'll find you a time.",
+                            "tool_calls": [
+                                {
+                                    "id": "c1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "propose_appointment",
+                                        "arguments": json.dumps(
+                                            {
+                                                "service_code": "repair_visit",
+                                                "preferred_window": "next week",
+                                                "notes": "boiler",
+                                            }
+                                        ),
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+                "usage": {"prompt_tokens": 900, "completion_tokens": 40},
+            },
+        )
+
+    conv_id = _new_conversation(hvac, "My boiler is making a banging noise")
+    llm = OpenAICompatLLM(transport=httpx.MockTransport(model))
+    with tenant_session(hvac.id) as s:
+        r = run_turn(s, hvac, get_pack("hvac"), llm, conv_id)
+        assert "propose_appointment" in r.decisions
+        reply = s.get(Message, r.reply_message_id)
+        assert reply is not None and "I'll find you a time." in reply.body
+        assert "<think>" not in reply.body and "plan" not in reply.body
+    assert sent[0]["model"] == "open-worker"
+    assert any(t["function"]["name"] == "propose_appointment" for t in sent[0]["tools"])

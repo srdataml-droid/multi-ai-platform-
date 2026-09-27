@@ -42,7 +42,7 @@ skipped, even in demos.
 | API and worker | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 | Founder's strongest stack |
 | Database | Postgres via Supabase, Row Level Security on every tenant table | Multitenancy at the database, not in application code |
 | Queue | Postgres table `jobs` polled by a worker process (no Redis in Phase 1) | One fewer service to run |
-| LLM | Anthropic API. Default `claude-sonnet-5` for worker turns, `claude-haiku-4-5-20251001` for classification and extraction, `claude-opus-5-5` only for evals and hard cases | Cost vs quality per task |
+| LLM | Provider chosen by `NOVAXIS_LLM_PROVIDER`: open-source/low-cost models through any OpenAI-compatible API (founder's choice, see `docs/models.md`), or the Anthropic API. Default `claude-sonnet-5` for worker turns, `claude-haiku-4-5-20251001` for classification and extraction, `claude-opus-5-5` only for evals and hard cases | Cost vs quality per task |
 | Web | Next.js (App Router), TypeScript, Tailwind, shadcn/ui | Founder already uses it |
 | Auth | Supabase Auth, one `tenant_id` claim per user | Ships with the database |
 | Messaging | Twilio for SMS and voice, Resend or SMTP for email, Meta WhatsApp Cloud API later | Standard, documented |

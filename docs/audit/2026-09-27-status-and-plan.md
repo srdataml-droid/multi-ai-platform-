@@ -122,7 +122,7 @@ Principle (founder's call, 27 Sep): **one strong product before scaling.** Depth
 ### Phase B: connect a real AI, open source first
 The code talks to the model through one interface (`packages/core/novaxis_core/llm.py`);
 today it has a scripted stand-in and an Anthropic adapter.
-1. Code: add **one "OpenAI-compatible" adapter**. Ollama (local), vLLM (self-hosted) and most
+1. **Done 27 Sep:** `OpenAICompatLLM` in `llm.py`, how-to in `docs/models.md`. First real run is on the founder's laptop (this build environment cannot reach Ollama). Code: add **one "OpenAI-compatible" adapter**. Ollama (local), vLLM (self-hosted) and most
    hosted open-model services (Groq, Together, OpenRouter, ...) speak this format, so
    switching to "something affordable" is a change of three settings, with no code
    change: base URL, model name and key. [VERIFY each provider's tool-calling support
