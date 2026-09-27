@@ -213,6 +213,40 @@ def test_routing_by_number_email_and_slug(hvac: Tenant, migrated: str) -> None:
         assert get_adapter("webchat").channel == "webchat"
 
 
+def test_routing_matches_an_address_exactly_never_as_a_pattern(hvac: Tenant) -> None:
+    with service_session() as s:
+        # LIKE wildcards once matched other businesses: "%" matched any address, "_" any letter.
+        assert resolve_tenant(s, "email", "%@inbound.novaxis.test") is None
+        assert resolve_tenant(s, "email", "demo_hvac@inbound.novaxis.test") is None
+        assert resolve_tenant(s, "twilio_sms", "+1500555000_") is None
+        assert resolve_tenant(s, "email", "") is None
+
+
+def test_a_second_business_can_never_hold_the_same_number_or_address(hvac: Tenant) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    for channel, config in (
+        ("twilio_sms", {"number": "+15005550006"}),
+        ("email", {"inbound_address": "DEMO-HVAC@inbound.novaxis.test"}),
+    ):
+        with pytest.raises(IntegrityError), service_session() as s:
+            s.add(
+                Tenant(
+                    name="Copycat",
+                    slug=f"copycat-{uuid.uuid4().hex[:8]}",
+                    pack_id="hvac",
+                    status="active",
+                    settings={
+                        "pack_id": "hvac",
+                        "channels": {channel: {"enabled": True, "config": config}},
+                    },
+                )
+            )
+            s.flush()
+    with service_session() as s:
+        assert resolve_tenant(s, "twilio_sms", "+15005550006").slug == "demo-hvac"  # type: ignore[union-attr]
+
+
 def _job_for(tid: uuid.UUID, conv_id: uuid.UUID) -> bool:
     with tenant_session(tid) as s:
         return (

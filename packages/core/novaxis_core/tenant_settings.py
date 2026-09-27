@@ -12,6 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from novaxis_core.identifiers import normalize_email, routing_phone
+
 
 class DayHours(BaseModel):
     """Opening hours for one weekday, 24h clock, local to the location."""
@@ -90,6 +92,25 @@ class TenantSettings(BaseModel):
         bad = set(v) - allowed
         if bad:
             raise ValueError(f"unknown weekday keys: {sorted(bad)}")
+        return v
+
+    @field_validator("channels")
+    @classmethod
+    def _routing_addresses(cls, v: dict[str, ChannelConfig]) -> dict[str, ChannelConfig]:
+        """The SMS number and inbound address decide which business receives a message, so
+        they are stored in one canonical form; the database keeps each one unique."""
+        sms = v.get("twilio_sms")
+        if sms and sms.config.get("number"):
+            number = routing_phone(str(sms.config["number"]))
+            if number is None:
+                raise ValueError("twilio_sms number must be a full number like +447700900123")
+            sms.config["number"] = number
+        email = v.get("email")
+        if email and email.config.get("inbound_address"):
+            address = normalize_email(str(email.config["inbound_address"]))
+            if address is None:
+                raise ValueError("email inbound_address must be an email address")
+            email.config["inbound_address"] = address
         return v
 
     @field_validator("privacy_url")

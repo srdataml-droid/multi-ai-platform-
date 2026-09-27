@@ -112,6 +112,39 @@ def test_signup_to_onboarded_without_touching_the_database(client: TestClient) -
         )
 
 
+def test_a_new_business_cannot_take_another_business_number_or_address(
+    client: TestClient,
+) -> None:
+    new = _signup(client)
+    h = new["headers"]
+    answers = _answers(client, h)
+    answers["sms_number"] = "+15005550006"  # demo-hvac's
+    r = client.post("/onboarding", headers=h, json=answers)
+    assert r.status_code == 409 and "another business" in r.json()["detail"]
+    own = f"+4477009{uuid.uuid4().int % 100000:05d}"
+    answers["sms_number"] = own
+    assert client.post("/onboarding", headers=h, json=answers).status_code == 200
+
+    # Settings can't be used to rewrite the routing addresses either.
+    st = client.get("/settings", headers=h).json()["settings"]
+    st["channels"]["twilio_sms"]["config"]["number"] = "+15005550006"
+    st["channels"]["email"]["config"]["inbound_address"] = "demo-hvac@inbound.novaxis.test"
+    st["tone"] = "warm"
+    assert client.put("/settings", headers=h, json={"settings": st}).status_code == 200
+    with service_session() as s:
+        t = s.get(Tenant, uuid.UUID(new["tenant_id"]))
+        assert t is not None
+        assert t.settings["tone"] == "warm", "other settings still save"
+        assert t.settings["channels"]["twilio_sms"]["config"]["number"] == own
+        assert "inbound_address" not in t.settings["channels"]["email"]["config"]
+        tid = t.id
+
+    # The operator may reassign numbers, but still never onto another business's.
+    acting = {"Authorization": f"Bearer {mint('dev|operator@novaxis-ops', act_tenant=str(tid))}"}
+    r = client.put("/settings", headers=acting, json={"settings": st})
+    assert r.status_code == 409 and "another business" in r.json()["detail"]
+
+
 def test_onboarding_errors_are_readable_and_owner_only(client: TestClient) -> None:
     h = _signup(client)["headers"]
     bad = _answers(client, h)

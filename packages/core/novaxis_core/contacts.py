@@ -7,38 +7,15 @@ their conversation to a stranger's history."""
 
 from __future__ import annotations
 
-import re
 import uuid
 from typing import Any
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
+from novaxis_core.identifiers import normalize_email, normalize_phone
 from novaxis_core.models import Appointment, AuditLog, Contact, Conversation
 from novaxis_core.sensitive import is_encrypted
-
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-def normalize_phone(raw: str) -> str | None:
-    """E.164 for the numbers a UK business sees: 07700 900123, +44 7700 900123, 447700900123.
-    Anything else with a leading + is kept as typed digits. Returns None if it is not a phone."""
-    s = raw.strip().replace("(0)", "")  # "+44 (0)7700 ..." drops the trunk zero
-    digits = re.sub(r"\D", "", s)
-    if s.startswith("+"):
-        out = "+" + digits
-    elif digits.startswith("44"):
-        out = "+" + digits
-    elif digits.startswith("0") and len(digits) == 11:
-        out = "+44" + digits[1:]
-    else:
-        return None
-    return out if 10 <= len(out) - 1 <= 15 else None
-
-
-def normalize_email(raw: str) -> str | None:
-    s = raw.strip().lower()
-    return s if EMAIL.match(s) else None
 
 
 def typed_identifiers(extracted: dict[str, Any]) -> tuple[set[str], set[str]]:

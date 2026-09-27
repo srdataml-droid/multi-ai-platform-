@@ -34,3 +34,29 @@ def test_retention_and_privacy_link_are_validated() -> None:
         TenantSettings(pack_id="hvac", retention_days=5)
     with pytest.raises(ValidationError):
         TenantSettings(pack_id="hvac", privacy_url="javascript:alert(1)")
+
+
+def test_routing_addresses_are_stored_in_one_form() -> None:
+    def channels(**c: dict[str, str]) -> dict[str, dict[str, object]]:
+        return {k: {"enabled": True, "config": v} for k, v in c.items()}
+
+    ts = TenantSettings(
+        pack_id="hvac",
+        channels=channels(
+            twilio_sms={"number": "07700 900123"},
+            email={"inbound_address": " Shop@Inbound.Novaxis.test "},
+        ),
+    )
+    assert ts.channels["twilio_sms"].config["number"] == "+447700900123"
+    assert ts.channels["email"].config["inbound_address"] == "shop@inbound.novaxis.test"
+    assert (
+        TenantSettings(pack_id="hvac", channels=channels(twilio_sms={"number": "+1 500 555 0006"}))
+        .channels["twilio_sms"]
+        .config["number"]
+        == "+15005550006"
+    )
+    for bad in ({"number": "call us"}, {"number": "12345"}):
+        with pytest.raises(ValidationError):
+            TenantSettings(pack_id="hvac", channels=channels(twilio_sms=bad))
+    with pytest.raises(ValidationError):
+        TenantSettings(pack_id="hvac", channels=channels(email={"inbound_address": "nope"}))

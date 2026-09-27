@@ -8,10 +8,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.actions import ACTIONS, RISK_ORDER
 from novaxis_core.models import AuditLog, Location, Tenant, User
+from novaxis_core.routing import claim_error, keep_routing
 from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import TenantSettings
 
@@ -23,6 +25,18 @@ def _tenant(session: TenantDb) -> Tenant:
     t = session.scalar(select(Tenant))
     assert t is not None
     return t
+
+
+def save_or_409(session: TenantDb) -> None:
+    """Write now, so a clash over a routing address (SMS number, inbound email) becomes a
+    readable 409 instead of a server error."""
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        reason = claim_error(exc)
+        if reason is None:
+            raise
+        raise HTTPException(status.HTTP_409_CONFLICT, reason) from exc
 
 
 def _require_owner(principal: CurrentPrincipal) -> None:
@@ -87,7 +101,13 @@ def write_settings(
                     status.HTTP_422_UNPROCESSABLE_CONTENT,
                     f"risk_overrides.{kind}: cannot go below {ACTIONS[kind].floor}",
                 )
-        t.settings = validated.model_dump()
+        saved = validated.model_dump()
+        if principal.role != "operator":
+            # The SMS number and inbound address route other people's messages here; an
+            # owner sets the number in onboarding, and the inbound address is fixed.
+            saved = keep_routing(saved, t.settings)
+        t.settings = saved
+        save_or_409(session)
         changes["settings"] = True
         # Slots are computed in the location's time zone; keep it in step with settings.
         for loc in session.scalars(select(Location)):

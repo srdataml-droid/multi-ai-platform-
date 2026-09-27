@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_api.routes_settings import save_or_409
 from novaxis_core.models import AuditLog, Location, Tenant
 from novaxis_core.onboarding import Wizard, build_settings, defaults_for, wizard_from_settings
 from novaxis_core.settings import get_settings
@@ -71,6 +72,7 @@ def save(body: dict[str, Any], principal: CurrentPrincipal, session: TenantDb) -
         if k in t.settings
     }
     t.settings = {**built.model_dump(), **kept}
+    save_or_409(session)
     t.name = wizard.business_name
     # Slots are computed in the location's time zone; keep it in step with the answer.
     for loc in session.scalars(select(Location)):
