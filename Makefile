@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install
+.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install ml-train-synthetic ml-train ml-export
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -55,3 +55,12 @@ worker-once:   ## drain the job queue once and exit
 
 web-install:
 	cd apps/web && npm install --no-audit --no-fund
+
+ml-train-synthetic: ## No-show model on synthetic data: proves the pipeline (docs/ml.md)
+	uv run python -m novaxis_ml.no_show train --source synthetic
+
+ml-train:      ## No-show model on real recorded outcomes (reads the database)
+	uv run python -m novaxis_ml.no_show train --source db
+
+ml-export:     ## Training table as CSV for notebooks
+	uv run python -m novaxis_ml.no_show export --out ml-rows.csv

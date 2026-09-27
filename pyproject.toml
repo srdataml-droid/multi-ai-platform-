@@ -25,13 +25,14 @@ dependencies = [
 entrypoint = "vercel_app:app"
 
 [tool.uv.workspace]
-members = ["apps/api", "apps/worker", "packages/core", "packages/packs", "packages/db"]
+members = ["apps/api", "apps/worker", "packages/core", "packages/packs", "packages/db", "packages/ml"]
 
 [tool.uv.sources]
 novaxis-worker = { workspace = true }
 novaxis-core = { workspace = true }
 novaxis-packs = { workspace = true }
 novaxis-db = { workspace = true }
+novaxis-ml = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -54,13 +55,13 @@ select = ["E", "F", "I", "B", "UP", "N", "W"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["novaxis_core", "novaxis_db"]
-mypy_path = "packages/core:packages/db"
+packages = ["novaxis_core", "novaxis_db", "novaxis_ml"]
+mypy_path = "packages/core:packages/db:packages/ml"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["apps", "packages"]
 
 [[tool.mypy.overrides]]
-module = ["pywebpush", "py_vapid"]
+module = ["pywebpush", "py_vapid", "sklearn", "sklearn.*"]
 ignore_missing_imports = true
