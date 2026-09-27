@@ -4,9 +4,9 @@ version: "0.1"
 tools: [extract_fields, propose_appointment, confirm_appointment, reschedule_appointment, cancel_appointment, hand_to_human, escalate_emergency]
 intake_opening: "Could I take your name, and a few words on what you need help with?"
 emergency_keywords: ["gas smell", "smell gas", "smell of gas", "carbon monoxide", "fire", "flooding"]
+emergency_alerted: I have alerted our on-call team and someone will contact you straight away.
 emergency_reply: >-
   If you are in immediate danger, leave the property and call the emergency services now.
-  I have alerted our on-call team and someone will contact you straight away.
 after_intake:
   action: propose_appointment
   default_service_code: general

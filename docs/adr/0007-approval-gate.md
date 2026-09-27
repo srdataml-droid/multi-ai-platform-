@@ -45,3 +45,14 @@ things persuasively.
   with evals in Chunk 13, never by removing the rule.
 - `quote_price` needs a tenant `price_list` in settings before it can ever be medium. That
   setting arrives with the dashboard (Chunk 9).
+
+## Amendment (2026-09-27): safeguarding flags risk, not the mention of a child
+The first rule refused any reply that mentioned "my son", "my daughter" or a child's age. For a
+family dentist that is most parents, and the audit found it also caught "minor leak", "caulk
+gun" and "threatening to drop". The rule now flags:
+- a writer who appears to be a child ("I'm 13", "I'm in year 8");
+- a child left alone;
+- self-harm, a threat against a person, abuse, or a weapon.
+
+`packages/core/tests/test_gate.py` holds both the new positives and the everyday phrases that
+must pass.

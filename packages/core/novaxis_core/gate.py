@@ -22,18 +22,34 @@ from novaxis_core.actions import ACTIONS, RISK_ORDER, Risk, params_valid
 
 State = Literal["auto_approved", "awaiting", "rejected"]
 
-# Words that mean a person must look before anything else happens. Matched on the
-# customer's latest message and on the proposal's own text.
-_CHILD = r"(son|daughter|child|children|kid|kids|boy|girl|baby|toddler|teen\w*)"
+# When a person must look before anything else happens. Matched on the customer's latest
+# message and on the proposal's own text. A parent mentioning their child is ordinary (a
+# family dentist hears it all day); what needs a person is a child who seems to be the one
+# writing, a child left alone, or harm, threats, abuse or weapons.
+_CHILD = r"(son|daughter|child|children|kid|kids|boy|girl|baby|toddler)"
+_ALONE = r"(home alone|alone|on (his|her|their) own|by (him|her|them)sel(f|ves)|unsupervised)"
 SAFEGUARDING = re.compile(
-    r"\b((my|your|our|the|his|her) " + _CHILD + r"|"
-    r"under (16|18)|minor|"
-    # An age counts only next to a child word: "my boy, 8 years old" yes,
-    # "boiler is 8 years old" no.
-    r"\b" + _CHILD + r"\b[^.!?]{0,40}\b\d{1,2}\s*(years?|yrs?) old|"
-    r"\b\d{1,2}\s*(years?|yrs?) old\b[^.!?]{0,20}\b" + _CHILD + r"|"
-    r"kill (myself|him|her|them|you)|suicid\w*|self[- ]harm|hurt (myself|someone)|"
-    r"threat\w*|weapon|gun|knife|abuse\w*|assault\w*)\b",
+    r"\b("
+    # The writer says they are a child: "I'm 13", "i am 14 years old", "I'm in year 8".
+    r"(i'?m|i am) (only )?([5-9]|1[0-5])( ?(years?|yrs?)( old)?| ?y/?o)?\b"
+    r"(?! (minutes|mins|hours|miles))|"
+    r"(i'?m|i am) in year [1-9]\b|"
+    # A child left alone.
+    r""
+    + _CHILD
+    + r"\b[^.!?]{0,60}\b"
+    + _ALONE
+    + r"|"
+    + _ALONE
+    + r"\b[^.!?]{0,30}\b(my|the|our) "
+    + _CHILD
+    + r"|"
+    # Harm, threats, abuse, weapons.
+    r"kill (myself|him|her|them|you)|suicid\w*|self[- ]harm\w*|hurt (myself|him|her|them)|"
+    r"threaten\w* (me|us|him|her|them)|threaten\w* to (kill|hurt|harm|attack)|"
+    r"abus(e|ed|ing|ive)\b|assault\w*|weapon\w*|"
+    r"(with|has|had|got|holding|carrying|bring|brought) an? (knife|gun|blade)"
+    r")",
     re.IGNORECASE,
 )
 

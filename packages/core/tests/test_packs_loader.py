@@ -101,3 +101,21 @@ def test_shipped_packs_load() -> None:
     )
     assert hvac.emergency_check is not None and hvac.rule is not None
     assert get_pack("nonexistent").id == "generic"
+
+
+def test_emergency_reply_may_not_promise_an_alert() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from novaxis_core.packspec import Manifest
+
+    with pytest.raises(ValidationError, match="emergency_alerted"):
+        Manifest.model_validate(
+            {
+                "id": "x",
+                "name": "X",
+                "tools": ["reply"],
+                "intake_opening": "Hi",
+                "emergency_reply": "Leave now. I have alerted our engineer.",
+            }
+        )

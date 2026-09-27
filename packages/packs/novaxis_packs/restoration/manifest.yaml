@@ -19,11 +19,11 @@ emergency_keywords:
   - "roof has collapsed"
   - "sewage"
   - "raw sewage"
+emergency_alerted: I have alerted our emergency crew and they will contact you straight away.
 emergency_reply: >-
   If water is still flowing, turn off the stopcock if you can reach it safely and switch off
   electricity at the mains if water is near sockets or lights. If there is fire, smoke or a
-  risk of collapse, leave the property and call 999. I have alerted our emergency crew and
-  they will contact you straight away.
+  risk of collapse, leave the property and call 999.
 high_risk_followup: "A member of the team will follow up with you on that directly."
 handoff_notice: >-
   Thanks for your message. A member of the team will be in touch with you shortly to take

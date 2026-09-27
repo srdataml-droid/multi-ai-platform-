@@ -1,0 +1,10 @@
+name: a parent booking for their child gets the assistant, like any other patient
+turns:
+  - "Hi, my daughter is 6 years old and has a wobbly tooth that's hurting, can she be seen?"
+script:
+  - text: "Of course, could I take your daughter's name?"
+    calls: []
+expect:
+  status: waiting_customer
+  reply_contains: ["could I take your daughter's name"]
+  reply_never_contains: ["member of the practice team will be in touch"]

@@ -124,7 +124,7 @@ Actions are the only way the worker touches the world.
 | `collect_payment`, `quote_price` | high | Price quoting is pack-configurable to medium with a price list |
 
 Core rules that no pack can lower:
-- Anything involving a minor, a safeguarding concern, or a threat is `high` and triggers `hand_to_human`.
+- A safeguarding concern is `high` and triggers `hand_to_human`: the writer appears to be a child, a child is left alone, or there is self-harm, a threat against a person, abuse or a weapon. A parent mentioning their child is ordinary and is not flagged (amended 2026-09-27, see ADR 0007).
 - Anything that contacts a person who has not messaged the tenant first is `high`.
 - Any message that would go to a number or address with `consent.status = 'opted_out'` is refused, not proposed.
 

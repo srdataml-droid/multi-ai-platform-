@@ -21,9 +21,24 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.channels import NormalisedInbound, get_adapter
 from novaxis_core.media import attach_media
-from novaxis_core.models import AuditLog, Contact, Conversation, Job, Message, Tenant
+from novaxis_core.models import (
+    Appointment,
+    AuditLog,
+    Contact,
+    Conversation,
+    Job,
+    Message,
+    Tenant,
+)
 
+# Opt-out keywords are an SMS convention; they mean something only where we push messages.
+# Web chat pushes nothing, so a visitor typing "stop" is simply talking. On SMS, "cancel"
+# from someone with an upcoming appointment is about the appointment, not the subscription.
 OPT_OUT_WORDS = frozenset({"stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout"})
+OPT_OUT_BY_CHANNEL: dict[str, frozenset[str]] = {
+    "twilio_sms": OPT_OUT_WORDS,
+    "email": frozenset({"stop", "unsubscribe"}),
+}
 OPT_IN_WORDS = frozenset({"start", "unstop", "yes", "subscribe"})
 OPT_OUT_CONFIRMATION = (
     "You have been unsubscribed and will receive no further messages from us. "
@@ -44,6 +59,29 @@ class IngestResult:
 
 def _keyword(body: str) -> str:
     return body.strip().lower().rstrip(".!")
+
+
+def _has_upcoming_appointment(session: Session, contact: Contact) -> bool:
+    return (
+        session.scalar(
+            select(Appointment.id)
+            .where(
+                Appointment.contact_id == contact.id,
+                Appointment.status.in_(["held", "confirmed"]),
+                Appointment.ends_at > datetime.now(UTC),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def is_opt_out(session: Session, contact: Contact, channel: str, word: str) -> bool:
+    if word not in OPT_OUT_BY_CHANNEL.get(channel, frozenset()):
+        return False
+    if word == "cancel" and _has_upcoming_appointment(session, contact):
+        return False  # the worker proposes cancel_appointment; staff approve it
+    return True
 
 
 def _audit(session: Session, tenant_id: uuid.UUID, event: str, **diff: object) -> None:
@@ -170,7 +208,7 @@ def ingest(session: Session, tenant: Tenant, inbound: NormalisedInbound) -> Inge
     contact = find_or_create_contact(session, tenant, inbound)
     word = _keyword(inbound.body)
 
-    if word in OPT_OUT_WORDS:
+    if is_opt_out(session, contact, inbound.channel, word):
         contact.consent = {
             **contact.consent,
             "status": "opted_out",
@@ -189,7 +227,7 @@ def ingest(session: Session, tenant: Tenant, inbound: NormalisedInbound) -> Inge
     if contact.consent.get("status") == "opted_out":
         conv = _open_conversation(session, tenant, contact, inbound.channel)
         msg = _store_inbound(session, tenant, conv, inbound)
-        if word in OPT_IN_WORDS:
+        if word in OPT_IN_WORDS and inbound.channel in OPT_OUT_BY_CHANNEL:
             contact.consent = {
                 **contact.consent,
                 "status": "implied",

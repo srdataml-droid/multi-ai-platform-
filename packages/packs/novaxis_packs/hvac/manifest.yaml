@@ -14,10 +14,10 @@ emergency_keywords:
   - "sparks"
   - "burning smell"
   - "smoke"
+emergency_alerted: I have alerted our on-call engineer and they will contact you straight away.
 emergency_reply: >-
   If you can smell gas or a carbon monoxide alarm is sounding, leave the property now, do not
   switch anything on or off, and call the gas emergency line or the emergency services.
-  I have alerted our on-call engineer and they will contact you straight away.
 high_risk_followup: "A member of the team will follow up with you on that directly."
 service_area_field: postcode
 out_of_area_reply: >-

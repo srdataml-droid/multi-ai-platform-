@@ -38,7 +38,7 @@ CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = 
         "handoff notice survives safeguarding",
         "handoff_notice",
         {"text": "A person will be in touch."},
-        {"inbound": "my son is 7 years old"},
+        {"inbound": "I'm 13 and home on my own"},
         ("low", "auto_approved"),
     ),
     (
@@ -153,11 +153,25 @@ CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = 
     ),
     # ---- core rules: safeguarding ----
     (
-        "minor in message",
+        "writer says they are a child",
         "reply",
         {"text": "sure"},
-        {"inbound": "it's for my daughter, she's 9 years old"},
+        {"inbound": "hi i'm 13 years old and the heating is off"},
         ("high", "rejected"),
+    ),
+    (
+        "child left alone",
+        "reply",
+        {"text": "sure"},
+        {"inbound": "my daughter is 8 and home alone with the leak"},
+        ("high", "rejected"),
+    ),
+    (
+        "a parent booking for their child is ordinary",
+        "reply",
+        {"text": "sure"},
+        {"inbound": "it's for my daughter, she's 9 years old, can she be seen?"},
+        ("low", "auto_approved"),
     ),
     (
         "threat in message",
@@ -195,11 +209,25 @@ CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = 
         ("low", "auto_approved"),
     ),
     (
-        "years old alone is enough",
+        "a child's age alone is not a concern",
         "reply",
         {"text": "ok"},
-        {"inbound": "my kid is 12 years old"},
-        ("high", "rejected"),
+        {"inbound": "my kid is 12 years old and needs a check-up"},
+        ("low", "auto_approved"),
+    ),
+    (
+        "everyday words that used to trip the filter",
+        "reply",
+        {"text": "ok"},
+        {"inbound": "minor leak, need a caulk gun job done; the pressure is threatening to drop"},
+        ("low", "auto_approved"),
+    ),
+    (
+        "i'm 10 minutes away is not an age",
+        "reply",
+        {"text": "ok"},
+        {"inbound": "I'm 10 minutes away"},
+        ("low", "auto_approved"),
     ),
     # ---- tenant overrides ----
     (
@@ -269,7 +297,7 @@ CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = 
         "tenant override cannot beat safeguarding",
         "reply",
         {"text": "hi"},
-        {"overrides": {"reply": "low"}, "inbound": "my son"},
+        {"overrides": {"reply": "low"}, "inbound": "my son is home alone"},
         ("high", "rejected"),
     ),
     # ---- service auto-confirm ----

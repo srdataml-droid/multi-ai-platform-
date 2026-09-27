@@ -277,3 +277,166 @@ def test_owner_braces_in_the_disclosure_do_not_break_replies(hvac: Tenant) -> No
         reply = s.get(Message, r.reply_message_id)
         assert reply is not None
         assert reply.body.startswith("Hi {first name}, Brace & Sons AI.")
+
+
+class _Delivers:
+    """A channel adapter whose sends always succeed (stands in for a working Twilio)."""
+
+    def __init__(self, channel: str) -> None:
+        self.channel = channel
+        self.sent: list[str] = []
+
+    def send(self, *, to: str, body: str, tenant_channel_config: dict[str, object]) -> object:
+        from novaxis_core.channels.base import ProviderRef
+
+        self.sent.append(to)
+        return ProviderRef(provider_ref=f"fake-{len(self.sent)}")
+
+
+def _emergency_reply(tenant: Tenant) -> tuple[str, str]:
+    conv_id = _new_conversation(tenant, "I can smell gas in the kitchen")
+    with tenant_session(tenant.id) as s:
+        r = run_turn(s, tenant, get_pack("hvac"), FakeLLM(script=[]), conv_id)
+        reply = s.get(Message, r.reply_message_id)
+        esc = s.scalar(
+            select(ActionProposal).where(
+                ActionProposal.conversation_id == conv_id,
+                ActionProposal.kind == "escalate_emergency",
+            )
+        )
+        assert reply is not None and esc is not None
+        return reply.body, esc.state
+
+
+def test_emergency_reply_never_claims_an_alert_that_failed(hvac: Tenant) -> None:
+    body, state = _emergency_reply(hvac)  # no SMS or email provider in tests: the alert fails
+    assert state == "failed"
+    assert "leave the property" in body
+    assert "I have alerted" not in body
+    assert "could not reach anyone directly" in body
+
+
+def test_emergency_reply_confirms_an_alert_that_was_delivered(hvac: Tenant) -> None:
+    from novaxis_core.channels import get_adapter, register_adapter
+
+    real = get_adapter("twilio_sms")
+    fake = _Delivers("twilio_sms")
+    register_adapter(fake)  # type: ignore[arg-type]
+    try:
+        body, state = _emergency_reply(hvac)
+    finally:
+        register_adapter(real)
+    assert state == "executed" and fake.sent
+    assert "I have alerted our on-call engineer" in body
+    assert "could not reach" not in body
+
+
+def test_auto_confirm_follows_the_booked_service_not_the_models_word(hvac: Tenant) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from novaxis_core import scheduling
+    from novaxis_core.gate import GateContext
+    from novaxis_core.models import Contact
+    from novaxis_core.sor import Slot
+    from novaxis_core.turn import propose
+
+    settings = dict(hvac.settings)
+    settings["services"] = [
+        {**sv, "auto_confirm": sv["code"] == "boiler_service"} for sv in settings["services"]
+    ]
+    with service_session() as s:
+        t = Tenant(
+            name="Auto Co",
+            slug=f"auto-{uuid.uuid4().hex[:8]}",
+            pack_id="hvac",
+            status="active",
+            settings=settings,
+        )
+        s.add(t)
+        s.flush()
+        s.expunge(t)
+    with tenant_session(t.id) as s:
+        conv_id = ingest(s, t, _webchat("broken boiler", uuid.uuid4().hex[:12])).conversation_id
+        conv = s.get(Conversation, conv_id)
+        contact = s.get(Contact, conv.contact_id)
+        p0 = ActionProposal(
+            tenant_id=t.id,
+            conversation_id=conv_id,
+            kind="propose_appointment",
+            params={},
+            risk="low",
+            state="executed",
+        )
+        s.add(p0)
+        s.flush()
+        start = datetime.now(UTC) + timedelta(days=3)
+        [appt] = scheduling.hold(
+            s, t, contact, conv, "repair_visit", [Slot(start, start + timedelta(minutes=90))], p0.id
+        )
+        # The model names the auto-confirm service; the appointment is a repair visit.
+        p, d = propose(
+            s,
+            t,
+            conv,
+            "confirm_appointment",
+            {"appointment_id": str(appt.id), "service_code": "boiler_service"},
+            GateContext(tenant_settings=t.settings),
+            "model proposal",
+        )
+        grounded = p.params["service_code"]
+    assert d.state == "awaiting", "a repair visit waits for staff"
+    assert grounded == "repair_visit"
+
+
+class _Down:
+    """An SMS provider that is down."""
+
+    channel = "twilio_sms"
+
+    def send(self, *, to: str, body: str, tenant_channel_config: dict[str, object]) -> object:
+        raise ConnectionError("provider unavailable")
+
+
+def test_a_reply_that_fails_to_send_is_retried_then_handed_to_a_person(hvac: Tenant) -> None:
+    from novaxis_core.channels import get_adapter, register_adapter
+    from novaxis_worker.loop import Picked, build_handlers, run_job
+
+    phone = f"+4477007{uuid.uuid4().int % 100000:05d}"
+    with tenant_session(hvac.id) as s:
+        conv_id = ingest(
+            s,
+            hvac,
+            NormalisedInbound(
+                channel="twilio_sms",
+                provider_ref=f"SM-{uuid.uuid4().hex[:8]}",
+                tenant_ref="+15005550006",
+                sender_phone=phone,
+                body="radiator is cold",
+            ),
+        ).conversation_id
+    real = get_adapter("twilio_sms")
+    register_adapter(_Down())  # type: ignore[arg-type]
+    try:
+        with tenant_session(hvac.id) as s:
+            run_turn(s, hvac, get_pack("hvac"), FakeLLM(script=[("On it.", [])]), conv_id)
+        with tenant_session(hvac.id) as s:
+            retry = s.scalar(
+                select(Job).where(
+                    Job.kind == "send_message",
+                    Job.payload["conversation_id"].astext == str(conv_id),
+                )
+            )
+            assert retry is not None, "a failed send is queued for retry, not dropped"
+            retry_id = retry.id
+        handlers = build_handlers(get_pack, FakeLLM())
+        for attempt in range(3):
+            with service_session() as s:
+                s.execute(Job.__table__.update().where(Job.id == retry_id).values(state="running"))
+            run_job(Picked(retry_id, hvac.id, "send_message", attempt), handlers)
+    finally:
+        register_adapter(real)
+    with tenant_session(hvac.id) as s:
+        job = s.get(Job, retry_id)
+        conv = s.get(Conversation, conv_id)
+        assert job is not None and job.state == "failed"
+        assert conv is not None and conv.status == "waiting_human", "a person takes over"

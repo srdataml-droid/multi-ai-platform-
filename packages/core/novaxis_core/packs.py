@@ -154,6 +154,8 @@ def load_pack(folder: Path) -> PackSpec:
         vocabulary=vocabulary,
         emergency_keywords=tuple(k.lower() for k in manifest.emergency_keywords),
         emergency_reply=manifest.emergency_reply,
+        emergency_alerted=manifest.emergency_alerted,
+        emergency_not_alerted=manifest.emergency_not_alerted,
         emergency_check=emergency_check,
         rule=rule,
         high_risk_followup=manifest.high_risk_followup,

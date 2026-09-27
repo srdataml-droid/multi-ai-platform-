@@ -14,10 +14,10 @@ emergency_keywords:
   - "will not stop bleeding"
   - "knocked out"
   - "swallowed"
+emergency_alerted: I have alerted the practice and someone will contact you as soon as possible.
 emergency_reply: >-
   If you have swelling that is affecting your breathing or swallowing, bleeding that will not
   stop, or a serious injury, please go to your nearest emergency department or call 999 now.
-  I have alerted the practice and someone will contact you as soon as possible.
 high_risk_followup: "A member of the practice team will follow up with you on that directly."
 handoff_notice: >-
   Thanks for your message. A member of the practice team will be in touch with you shortly to

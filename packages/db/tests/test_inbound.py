@@ -211,3 +211,74 @@ def test_routing_by_number_email_and_slug(hvac: Tenant, migrated: str) -> None:
         assert resolve_tenant(s, "webchat", "demo-dental").slug == "demo-dental"  # type: ignore[union-attr]
         assert resolve_tenant(s, "twilio_sms", "+10000000000") is None
         assert get_adapter("webchat").channel == "webchat"
+
+
+def _job_for(tid: uuid.UUID, conv_id: uuid.UUID) -> bool:
+    with tenant_session(tid) as s:
+        return (
+            s.scalar(
+                select(func.count()).where(
+                    Job.kind == "worker_turn",
+                    Job.payload["conversation_id"].astext == str(conv_id),
+                )
+            )
+            or 0
+        ) > 0
+
+
+def test_stop_on_web_chat_is_just_a_message(hvac: Tenant) -> None:
+    v = uuid.uuid4().hex[:10]
+    with tenant_session(hvac.id) as s:
+        r = ingest(
+            s,
+            hvac,
+            NormalisedInbound(
+                channel="webchat",
+                provider_ref=f"webchat:{v}:1",
+                tenant_ref="demo-hvac",
+                sender_visitor_id=v,
+                body="stop",
+            ),
+        )
+        assert not r.opted_out
+        contact = s.get(Contact, r.contact_id)
+        assert contact is not None and contact.consent.get("status") != "opted_out"
+    assert _job_for(hvac.id, r.conversation_id), "the assistant still answers"
+
+
+def test_cancel_by_text_cancels_the_booking_not_the_customer(
+    hvac: Tenant, fake_sms: FakeSms
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from novaxis_core.models import Appointment
+
+    phone = f"+4477009{uuid.uuid4().int % 100000:05d}"
+    with tenant_session(hvac.id) as s:
+        first = ingest(s, hvac, _sms("boiler is broken", f"SM-{uuid.uuid4().hex[:8]}", phone))
+        start = datetime.now(UTC) + timedelta(days=2)
+        s.add(
+            Appointment(
+                tenant_id=hvac.id,
+                contact_id=first.contact_id,
+                conversation_id=first.conversation_id,
+                starts_at=start,
+                ends_at=start + timedelta(hours=1),
+                service_code="repair_visit",
+                status="confirmed",
+            )
+        )
+    with tenant_session(hvac.id) as s:
+        r = ingest(s, hvac, _sms("Cancel", f"SM-{uuid.uuid4().hex[:8]}", phone))
+        assert not r.opted_out
+        contact = s.get(Contact, r.contact_id)
+        assert contact is not None and contact.consent.get("status") != "opted_out"
+    assert _job_for(hvac.id, r.conversation_id), "the assistant handles the cancellation"
+    assert not any(OPT_OUT_CONFIRMATION in body for _, body in fake_sms.sent)
+
+
+def test_cancel_by_text_with_nothing_booked_still_opts_out(hvac: Tenant, fake_sms: FakeSms) -> None:
+    phone = f"+4477008{uuid.uuid4().int % 100000:05d}"
+    with tenant_session(hvac.id) as s:
+        r = ingest(s, hvac, _sms("CANCEL", f"SM-{uuid.uuid4().hex[:8]}", phone))
+        assert r.opted_out

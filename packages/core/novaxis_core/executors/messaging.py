@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
-from novaxis_core.models import ActionProposal, Conversation, Message, Tenant
+from novaxis_core.models import ActionProposal, Conversation, Job, Message, Tenant
 from novaxis_core.outbound import send_message
 
 
@@ -25,7 +25,25 @@ def _send_text(session: Session, tenant: Tenant, proposal: ActionProposal, text:
     )
     session.add(msg)
     session.flush()
-    sent = send_message(session, tenant, msg.id)
+    try:
+        sent = send_message(session, tenant, msg.id)
+    except PermissionError as exc:  # opted out: never retry
+        return ExecResult(False, {"message_id": str(msg.id)}, str(exc))
+    except Exception as exc:  # noqa: BLE001 - a provider hiccup must not silently drop a reply
+        # The message row stays; a send job retries it with backoff, and after the last
+        # attempt the job loop hands the conversation to a person (it carries the id).
+        session.add(
+            Job(
+                tenant_id=tenant.id,
+                kind="send_message",
+                payload={"message_id": str(msg.id), "conversation_id": str(conv.id)},
+            )
+        )
+        session.flush()
+        return ExecResult(
+            True,
+            {"message_id": str(msg.id), "queued_retry": True, "error": type(exc).__name__},
+        )
     return ExecResult(True, {"message_id": str(msg.id), "provider_ref": sent.provider_ref or ""})
 
 

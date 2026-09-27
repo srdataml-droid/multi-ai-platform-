@@ -143,6 +143,23 @@ def _record_usage(
     )
 
 
+def ground_params(session: Session, kind: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Replace facts the model asserts with facts the database holds, before the gate sees
+    them. The gate is a pure function and cannot look anything up (ADR 0007), so a model's
+    word must never decide a risk the rows can settle."""
+    if kind == "confirm_appointment":
+        from novaxis_core.models import Appointment
+
+        try:
+            appt = session.get(Appointment, uuid.UUID(str(params.get("appointment_id", ""))))
+        except ValueError:
+            appt = None
+        if appt is not None:
+            return {**params, "service_code": appt.service_code}
+        return {**params, "service_code": ""}  # unknown appointment: no auto-confirm
+    return params
+
+
 def propose(
     session: Session,
     tenant: Tenant,
@@ -153,6 +170,7 @@ def propose(
     origin: str,
 ) -> tuple[ActionProposal, Decision]:
     """Store one proposal with the gate's decision and act on it."""
+    params = ground_params(session, kind, params)
     d = decide(kind, params, ctx)
     p = ActionProposal(
         tenant_id=tenant.id,
@@ -278,8 +296,18 @@ def run_turn(
         )
         result_ids.append(p.id)
         decisions["escalate_emergency"] = d.state
+        # Tell the customer someone was alerted only if an alert actually went out.
+        alerted = p.state == "executed"
+        reply_text = (
+            f"{reply_text} {pack.emergency_alerted if alerted else pack.emergency_not_alerted}"
+        ).strip()
         _audit(
-            session, tenant.id, "turn.emergency_precheck", conversation_id=conv.id, proposal_id=p.id
+            session,
+            tenant.id,
+            "turn.emergency_precheck",
+            conversation_id=conv.id,
+            proposal_id=p.id,
+            alerted=alerted,
         )
     else:
         system_volatile = tenant_facts(tenant)

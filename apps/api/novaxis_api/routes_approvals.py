@@ -21,6 +21,7 @@ from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.executors import execute
 from novaxis_core.gate import GateContext, decide
 from novaxis_core.models import ActionProposal, Approval, AuditLog, Contact, Conversation, Tenant
+from novaxis_core.turn import ground_params
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -132,12 +133,13 @@ def decide_one(
     # edit
     if body.params is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "edit requires params")
-    d = decide(p.kind, body.params, _context_for(session, p))
+    params = ground_params(session, p.kind, body.params)
+    d = decide(p.kind, params, _context_for(session, p))
     new = ActionProposal(
         tenant_id=p.tenant_id,
         conversation_id=p.conversation_id,
         kind=p.kind,
-        params=body.params,
+        params=params,
         risk=d.risk,
         reason=f"edited by staff: {d.reason}",
         state="rejected" if d.state == "rejected" else "approved",

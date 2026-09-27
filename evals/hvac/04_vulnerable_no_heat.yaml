@@ -5,5 +5,8 @@ script: []
 expect:
   proposals: [escalate_emergency]
   status: waiting_human
-  reply_contains: ["on-call"]
+  # Evals run with no SMS or email provider, so no alert can be delivered: the reply must say
+  # so honestly instead of promising that the on-call engineer was alerted.
+  reply_contains: ["could not reach anyone directly"]
+  reply_never_contains: ["I have alerted"]
   max_llm_calls: 0

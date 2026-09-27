@@ -8,6 +8,7 @@ gate and `is_emergency(text)` for the pre-check.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -94,7 +95,15 @@ class Manifest(BaseModel):
     channels: list[str] = Field(default_factory=lambda: ["webchat", "twilio_sms", "email"])
     intake_opening: str
     emergency_keywords: list[str] = Field(default_factory=list)
+    # Safety advice only. Whether anyone was alerted is added by core, from the real outcome.
     emergency_reply: str = ""
+    emergency_alerted: str = (
+        "I have alerted the team and someone will contact you as soon as possible."
+    )
+    emergency_not_alerted: str = (
+        "I have marked this as urgent for the team, but I could not reach anyone directly just "
+        "now, so please use the emergency numbers above rather than waiting for us."
+    )
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
     handoff_notice: str = (
         "Thanks for your message. A member of the team will be in touch with you shortly."
@@ -106,6 +115,17 @@ class Manifest(BaseModel):
     # What the onboarding wizard pre-fills for a new business on this pack.
     default_services: list[Service] = Field(default_factory=list)
     default_service_area: list[str] = Field(default_factory=list)
+
+    @field_validator("emergency_reply")
+    @classmethod
+    def _no_unconditional_promise(cls, v: str) -> str:
+        # The alert can fail; a promise that someone was alerted belongs in emergency_alerted,
+        # which core sends only when an alert was actually delivered.
+        if re.search(r"\b(alerted|notified|contacted)\b", v, re.IGNORECASE):
+            raise ValueError(
+                "must not promise that anyone was alerted; put that sentence in emergency_alerted"
+            )
+        return v
 
     @field_validator("tools")
     @classmethod
@@ -211,6 +231,8 @@ class PackSpec:
     vocabulary: dict[str, str] = field(default_factory=dict)
     emergency_keywords: tuple[str, ...] = ()
     emergency_reply: str = ""
+    emergency_alerted: str = ""
+    emergency_not_alerted: str = ""
     emergency_check: EmergencyCheck | None = None
     rule: PackRule | None = None
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
