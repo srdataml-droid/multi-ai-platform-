@@ -14,6 +14,7 @@ export default function SignupPage() {
   const [form, setForm] = useState({ business_name: "", email: "", pack_id: "hvac", passcode: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/signup/options").then((r) => r.json()).then(setOpts).catch(() => setError("The API is not reachable."));
@@ -31,7 +32,8 @@ export default function SignupPage() {
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "sign-up failed");
       if (data.token) setToken(data.token);
-      router.replace("/onboarding");
+      if (data.login_code) setCode(data.login_code);
+      else router.replace("/onboarding");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -40,6 +42,18 @@ export default function SignupPage() {
   };
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
+
+  if (code) {
+    return (
+      <div className="mx-auto mt-16 max-w-lg px-4">
+        <Card title="Save your login code">
+          <p className="text-sm text-slate-600">You will need this code with your email to sign in again. It is shown only once.</p>
+          <p data-testid="login-code" className="my-4 select-all rounded bg-slate-100 px-4 py-3 text-center font-mono text-2xl tracking-widest">{code}</p>
+          <Button onClick={() => router.replace("/onboarding")}>I have saved it, continue</Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto mt-16 max-w-lg px-4">

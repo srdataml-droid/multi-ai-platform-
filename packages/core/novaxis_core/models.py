@@ -123,6 +123,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(200))
+    # Demo mode only: a personal login code (scrypt hash) given once at sign-up.
+    login_code_hash: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = _created_at()
 
 
@@ -391,6 +393,15 @@ class BridgeTicket(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class RateLimit(Base):
+    """Requests counted per key per fixed window. Service-only."""
+
+    __tablename__ = "rate_limits"
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
 class BillingEvent(Base):
     """One billing webhook delivery, keyed by the provider's event id. Service-only: the app
     role has no privileges on it. A replayed delivery finds its row and does nothing."""
@@ -433,4 +444,4 @@ APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")
 
 # Tables the app role may not touch at all: RLS forced, no policy, no grant. Only the
 # service session (webhooks, operator tooling) reads and writes them.
-SERVICE_ONLY_TABLES: tuple[str, ...] = ("billing_events",)
+SERVICE_ONLY_TABLES: tuple[str, ...] = ("billing_events", "rate_limits")

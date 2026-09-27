@@ -127,6 +127,12 @@ export default function SettingsPage() {
       <Card title="Website chat widget">
         <p className="mb-2 text-xs text-slate-500">Paste this one line before the closing body tag of your website.</p>
         <pre data-testid="widget-snippet" className="overflow-x-auto rounded bg-slate-900 p-3 text-xs text-slate-100">{snippet}</pre>
+        <label className="mt-3 block text-sm">Websites allowed to show your chat (comma separated)
+          <input data-testid="widget-origins" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="https://www.yourbusiness.co.uk" value={((st.widget_origins as string[] | undefined) ?? []).join(", ")} onChange={(e) => update({ widget_origins: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          {((st.widget_origins as string[] | undefined) ?? []).length ? "Only these websites can use your chat box." : "Empty: any website could copy your chat box. Add your own website address to stop that."} Press Save all at the top.
+        </p>
       </Card>
     </div>
   );

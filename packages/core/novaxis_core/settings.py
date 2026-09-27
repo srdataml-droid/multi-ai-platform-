@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     auto_migrate: bool = False
     # Protects /internal/* (tick, migrate, seed). Empty disables those endpoints.
     cron_secret: str = ""
-    # A shared passcode that enables the passwordless demo login outside local.
+    # A shared passcode that enables the passwordless demo login outside local. It opens the
+    # demo tenants only; sign-ups get their own login code; operators need operator_passcode.
     demo_passcode: str = ""
+    operator_passcode: str = ""
+    # Rate limits run everywhere except local and test runs (tests switch them on to test them).
+    rate_limits_enabled: bool = False
     worker_poll_seconds: float = 1.0
     log_level: str = "INFO"
     # HS256 secret that signs dashboard JWTs. Supabase projects expose theirs in

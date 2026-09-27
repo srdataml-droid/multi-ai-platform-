@@ -28,7 +28,29 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(r.status, detail);
   }
+  maybeRefresh();
   return (await r.json()) as T;
+}
+
+// A signed-in person is not cut off mid-shift: when less than two hours remain, swap the
+// token for a fresh one. Operator entries into a tenant are never extended (the API says no).
+let refreshing = false;
+function maybeRefresh(): void {
+  const token = getToken();
+  if (!token || refreshing) return;
+  let exp = 0;
+  try {
+    exp = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp ?? 0;
+  } catch {
+    return;
+  }
+  if (exp * 1000 - Date.now() > 2 * 3600 * 1000) return;
+  refreshing = true;
+  fetch("/api/auth/refresh", { method: "POST", headers: { Authorization: `Bearer ${token}` } })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { token?: string } | null) => { if (d?.token) setToken(d.token); })
+    .catch(() => null)
+    .finally(() => { refreshing = false; });
 }
 
 export const post = <T,>(path: string, body?: unknown) =>

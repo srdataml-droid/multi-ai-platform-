@@ -15,16 +15,18 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from novaxis_api.auth import _decode
 from novaxis_api.devtoken import mint
+from novaxis_api.limits import client_ip, enforce
 from novaxis_api.routes_auth import _dev_login_allowed, sign_in_mode
 from novaxis_core.billing import start_trial
 from novaxis_core.models import AuditLog, Location, Tenant, User
+from novaxis_core.security import hash_code, new_login_code
 from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import TenantSettings
 from novaxis_db.session import service_session
@@ -69,9 +71,12 @@ def _unique_slug(session: Session, name: str) -> str:
 
 
 @router.post("")
-def signup(body: SignupIn, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def signup(
+    body: SignupIn, request: Request, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
     s = get_settings()
     mode = sign_in_mode()
+    enforce((f"signup:ip:{client_ip(request)}", 5, 3600))
     email = body.email.lower()
     subject: str
     if mode == "supabase":
@@ -89,6 +94,9 @@ def signup(body: SignupIn, authorization: str | None = Header(default=None)) -> 
     if body.pack_id not in available_packs():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "unknown pack")
 
+    # Hosted demo: the business gets its own login code, shown once. The shared demo
+    # passcode never opens a real sign-up's account.
+    login_code = new_login_code()
     with service_session() as session:
         customers = session.scalar(
             select(func.count()).select_from(Tenant).where(Tenant.plan != "internal")
@@ -116,6 +124,7 @@ def signup(body: SignupIn, authorization: str | None = Header(default=None)) -> 
             email=email,
             role="owner",
             display_name=None,
+            login_code_hash=hash_code(login_code) if mode == "demo" else None,
         )
         session.add(owner)
         session.flush()
@@ -136,4 +145,5 @@ def signup(body: SignupIn, authorization: str | None = Header(default=None)) -> 
         "slug": slug,
         # Supabase callers already hold their token; everyone else gets one here.
         "token": None if mode == "supabase" else mint(subject),
+        "login_code": login_code if mode == "demo" else None,
     }

@@ -11,13 +11,16 @@ from __future__ import annotations
 import hmac
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from novaxis_api.auth import CurrentPrincipal
+from novaxis_api.auth import CurrentPrincipal, _decode
 from novaxis_api.devtoken import mint
-from novaxis_core.models import User
+from novaxis_api.limits import client_ip, enforce
+from novaxis_core.models import Tenant, User
+from novaxis_core.security import check_code
 from novaxis_core.settings import get_settings
 from novaxis_db.session import service_session
 
@@ -47,17 +50,49 @@ def sign_in_mode() -> str:
 
 
 @router.post("/dev-login")
-def dev_login(body: DevLogin) -> dict[str, Any]:
+def dev_login(body: DevLogin, request: Request) -> dict[str, Any]:
+    """Local: any seeded user. Hosted demo: the shared passcode opens the demo businesses
+    only; a business that signed up uses the login code it was given; an operator needs the
+    operator passcode. Every failure looks the same, so the form cannot be used to find out
+    which emails have accounts."""
     s = get_settings()
-    if s.env not in ("local", "test") and not s.demo_passcode:
+    local = s.env in ("local", "test")
+    if not local and not (s.demo_passcode or s.operator_passcode):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not available")
-    if not _dev_login_allowed(body.passcode):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong passcode")
-    with service_session() as s:
-        u = s.scalar(select(User).where(User.email == body.email.lower()))
+    email = body.email.strip().lower()
+    enforce((f"login:ip:{client_ip(request)}", 30, 900), (f"login:email:{email}", 10, 900))
+    with service_session() as session:
+        u = session.scalar(select(User).where(User.email == email))
         if u is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user; run make seed")
+            if local:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user; run make seed")
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong email or code")
+        if not local and not _may_enter(session, u, body.passcode or ""):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong email or code")
         return {"token": mint(u.auth_subject), "role": u.role, "email": u.email}
+
+
+def _may_enter(session: Session, u: User, code: str) -> bool:
+    s = get_settings()
+    if u.role == "operator":
+        return bool(s.operator_passcode) and hmac.compare_digest(code, s.operator_passcode)
+    if u.login_code_hash:
+        return check_code(code, u.login_code_hash)
+    tenant = session.get(Tenant, u.tenant_id)
+    demo = tenant is not None and tenant.slug.startswith("demo-")
+    return demo and bool(s.demo_passcode) and hmac.compare_digest(code, s.demo_passcode)
+
+
+@router.post("/refresh")
+def refresh(principal: CurrentPrincipal, authorization: str = Header()) -> dict[str, Any]:
+    """A fresh token for someone already signed in, so a shift is not cut off after eight
+    hours. An operator's one-hour entry into a tenant is never extended."""
+    if principal.acting:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "operator entry is not extended")
+    if sign_in_mode() == "supabase":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Supabase renews its own sessions")
+    subject, _, _ = _decode(authorization.split(" ", 1)[1].strip())
+    return {"token": mint(subject)}
 
 
 @router.get("/config")

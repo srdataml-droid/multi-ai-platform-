@@ -37,7 +37,7 @@ export default function LoginPage() {
             <label className="text-sm">Password<input type="password" className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           )}
           {cfg?.mode === "demo" && (
-            <label className="text-sm">Demo passcode<input type="password" data-testid="passcode" className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={passcode} onChange={(e) => setPasscode(e.target.value)} /></label>
+            <label className="text-sm">Passcode or your login code<input type="password" data-testid="passcode" className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={passcode} onChange={(e) => setPasscode(e.target.value)} /></label>
           )}
           {cfg?.mode === "dev" && <p className="text-xs text-slate-500">Local mode: any seeded email signs in without a password.</p>}
           {cfg?.mode === "none" && <p className="text-xs text-red-600">Sign-in is not configured on this deployment.</p>}

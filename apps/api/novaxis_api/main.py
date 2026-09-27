@@ -64,6 +64,14 @@ def create_app() -> FastAPI:
     app.include_router(operator_router)
 
     @app.middleware("http")
+    async def security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+        response: Response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
+
+    @app.middleware("http")
     async def widget_cors(request: Request, call_next):  # type: ignore[no-untyped-def]
         # The chat widget runs on each business's own website and calls these routes from
         # that origin. They carry no cookies and no staff token, so any origin may call them;

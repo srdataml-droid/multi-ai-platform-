@@ -7,6 +7,7 @@ customer conversation. Packs extend this with their own fields via `pack` (Chunk
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -65,6 +66,11 @@ class TenantSettings(BaseModel):
         "at any time. How can I help?"
     )
     pack: dict[str, Any] = Field(default_factory=dict, description="Pack-specific settings")
+    widget_origins: list[str] = Field(
+        default_factory=list,
+        description="Websites allowed to host the chat widget, e.g. https://www.example.co.uk. "
+        "Empty means any site.",
+    )
 
     @field_validator("business_hours")
     @classmethod
@@ -74,6 +80,18 @@ class TenantSettings(BaseModel):
         if bad:
             raise ValueError(f"unknown weekday keys: {sorted(bad)}")
         return v
+
+    @field_validator("widget_origins")
+    @classmethod
+    def _origins(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for raw in v:
+            o = raw.strip().rstrip("/").lower()
+            if not re.fullmatch(r"https?://[a-z0-9.-]+(:\d{1,5})?", o):
+                raise ValueError(f"{raw!r} is not a website address like https://www.example.com")
+            if o not in out:
+                out.append(o)
+        return out
 
     @field_validator("risk_overrides")
     @classmethod

@@ -12,11 +12,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
+from novaxis_api.limits import client_ip, enforce
 from novaxis_core.channels import InboundRequest, NormalisedInbound, ParseError, get_adapter
 from novaxis_core.channels.webchat import mint_visitor_token, verify_visitor_token
 from novaxis_core.inbound import IngestResult, ingest
 from novaxis_core.models import Contact, Conversation, Message, Tenant
 from novaxis_core.routing import resolve_tenant
+from novaxis_core.settings import get_settings
 from novaxis_db.session import service_session, tenant_session
 
 log = logging.getLogger("novaxis.inbound")
@@ -73,9 +75,34 @@ def _route_and_ingest(inbound: NormalisedInbound) -> tuple[Tenant, IngestResult]
     return tenant, result
 
 
+def _origin_allowed(tenant: Tenant, origin: str | None) -> bool:
+    """A business can list the websites allowed to host its widget. Our own dashboard (the
+    demo page, the widget preview) is always allowed; no Origin header means not a browser."""
+    allowed = tenant.settings.get("widget_origins") or []
+    if not allowed or not origin:
+        return True
+    origin = origin.rstrip("/").lower()
+    own = get_settings().public_web_url.rstrip("/").lower()
+    return origin == own or origin in allowed
+
+
+def _check_widget(tenant_slug: str, request: Request, visitor: str | None) -> None:
+    ip = client_ip(request)
+    rules = [(f"chat:ip:{ip}", 30, 600), (f"chat:tenant:{tenant_slug}", 600, 3600)]
+    if visitor:
+        rules.append((f"chat:visitor:{visitor}", 20, 600))
+    enforce(*rules)
+    with service_session() as s:
+        tenant = resolve_tenant(s, "webchat", tenant_slug)
+        if tenant is not None and not _origin_allowed(tenant, request.headers.get("origin")):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "this website may not use the widget")
+
+
 @router.post("/webchat/{tenant_slug}")
 async def webchat(tenant_slug: str, request: Request) -> dict[str, Any]:
     req = await _to_inbound_request(request)
+    token = (req.json or {}).get("visitor_token")
+    _check_widget(tenant_slug, request, verify_visitor_token(token) if token else None)
     req = InboundRequest(
         url=req.url,
         headers=req.headers,
@@ -96,13 +123,15 @@ async def webchat(tenant_slug: str, request: Request) -> dict[str, Any]:
 
 @router.get("/webchat/{tenant_slug}/messages")
 def webchat_messages(
-    tenant_slug: str, visitor_token: str, after: str | None = None
+    tenant_slug: str, visitor_token: str, request: Request, after: str | None = None
 ) -> dict[str, Any]:
     """The widget polls this for replies. Only the visitor's own conversation is readable,
     because the visitor id comes from a token we signed."""
     visitor_id = verify_visitor_token(visitor_token)
     if visitor_id is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad visitor token")
+    # Polling every 3 s while open is 200 per 10 minutes; allow a little over that.
+    enforce((f"poll:visitor:{visitor_id}", 300, 600))
     with service_session() as s:
         tenant = resolve_tenant(s, "webchat", tenant_slug)
         if tenant is None:
