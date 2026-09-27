@@ -33,9 +33,9 @@ from novaxis_core.bridge import send_ticket_email
 from novaxis_core.llm import LLMClient
 from novaxis_core.media import fetch_media
 from novaxis_core.metrics import ROLLUP_KIND, enqueue_rollups, rollup_recent
-from novaxis_core.models import AuditLog, Conversation, Job, Tenant
+from novaxis_core.models import AuditLog, Conversation, Job, Message, Tenant
 from novaxis_core.notify import notify_staff
-from novaxis_core.outbound import send_message
+from novaxis_core.outbound import ReplyWindowClosedError, send_message
 from novaxis_core.packspec import PackSpec
 from novaxis_core.privacy import PURGE_KIND, enqueue_purges, purge_expired
 from novaxis_core.settings import get_settings
@@ -106,7 +106,18 @@ def _handle_worker_turn(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> 
 
 
 def _handle_send_message(session: Session, tenant: Tenant, job: Job) -> None:
-    send_message(session, tenant, uuid.UUID(job.payload["message_id"]))
+    msg_id = uuid.UUID(job.payload["message_id"])
+    try:
+        send_message(session, tenant, msg_id)
+    except ReplyWindowClosedError as exc:
+        # Retrying cannot open WhatsApp's window; only the customer or a person can.
+        msg = session.get(Message, msg_id)
+        conv = session.get(Conversation, msg.conversation_id) if msg else None
+        if conv is not None:
+            if conv.status not in ("waiting_human", "closed"):
+                conv.status = "waiting_human"
+            needs_a_person(session, tenant.id, conv.id)
+        job.last_error = f"to a person: {exc}"[:2000]
 
 
 def _handle_notify_staff(session: Session, tenant: Tenant, job: Job) -> None:

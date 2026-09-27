@@ -11,13 +11,16 @@ contact.
 
 Outbound: free-form replies are only allowed within 24 hours of the customer's last
 message; later messages need a template Meta has approved. The 24-hour check happens
-before sending (outbound.py), so a closed window goes to a person instead of failing.
+before sending (outbound.py). Outside the window the message goes out wrapped in the
+business's approved update template (UPDATE_TEMPLATE_BODY) if it has one, otherwise to
+a person.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from typing import Any
 
 import httpx
@@ -36,6 +39,45 @@ VOICE_NOTE = (
     "[The customer sent a voice note. Voice notes cannot be played here yet; "
     "ask them kindly to type their message.]"
 )
+
+# The template each business submits to Meta (docs/whatsapp.md), category Utility.
+# {{1}} customer's name, {{2}} business name, {{3}} the message itself.
+UPDATE_TEMPLATE_NAME = "novaxis_update"
+UPDATE_TEMPLATE_LANGUAGE = "en_GB"
+UPDATE_TEMPLATE_BODY = (
+    "Hello {{1}}, this is {{2}} about your enquiry: {{3}} "
+    "Reply to this message to continue the conversation."
+)
+# Meta's limit for a whole template body is 1024 characters [VERIFY]; leave room for the
+# fixed text and the two short parameters.
+MAX_TEMPLATE_TEXT = 700
+_TEMPLATE_NAME = re.compile(r"^[a-z0-9_]{1,512}$")
+_LANGUAGE = re.compile(r"^[a-z]{2,3}(_[A-Z]{2})?$")
+
+
+def template_param(text: str) -> str:
+    """Template parameters cannot hold new lines, tabs or runs of spaces [VERIFY]."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def update_template(config: dict[str, Any]) -> dict[str, str] | None:
+    """The business's approved update template, or None if it has not got one."""
+    t = config.get("update_template")
+    if not isinstance(t, dict) or not t.get("name"):
+        return None
+    return {"name": str(t["name"]), "language": str(t.get("language") or UPDATE_TEMPLATE_LANGUAGE)}
+
+
+def check_update_template(t: Any) -> dict[str, str]:
+    if not isinstance(t, dict):
+        raise ValueError("whatsapp update_template is {name, language}")
+    name = str(t.get("name", "")).strip()
+    language = str(t.get("language") or UPDATE_TEMPLATE_LANGUAGE).strip()
+    if not _TEMPLATE_NAME.match(name):
+        raise ValueError("whatsapp template name: lower-case letters, digits and _ only")
+    if not _LANGUAGE.match(language):
+        raise ValueError("whatsapp template language is a code such as en_GB")
+    return {"name": name, "language": language}
 
 
 def signature(app_secret: str, body: bytes) -> str:
@@ -151,6 +193,45 @@ class WhatsAppAdapter:
                     "to": to.lstrip("+"),
                     "type": "text",
                     "text": {"body": body, "preview_url": False},
+                },
+            )
+        r.raise_for_status()
+        return ProviderRef(provider_ref=str(r.json()["messages"][0]["id"]))
+
+    def send_template(
+        self,
+        *,
+        to: str,
+        name: str,
+        language: str,
+        params: list[str],
+        tenant_channel_config: dict[str, Any],
+    ) -> ProviderRef:
+        """Send an approved template: the only thing Meta accepts outside the 24 hours."""
+        s = get_settings()
+        phone_number_id = str(tenant_channel_config.get("phone_number_id", ""))
+        if not phone_number_id or not s.whatsapp_access_token:
+            raise ValueError("WhatsApp is not connected: phone number id or access token missing")
+        with httpx.Client(transport=self._transport, timeout=10) as client:
+            r = client.post(
+                f"{s.whatsapp_api_base}/{phone_number_id}/messages",
+                headers={"Authorization": f"Bearer {s.whatsapp_access_token}"},
+                json={
+                    "messaging_product": "whatsapp",
+                    "to": to.lstrip("+"),
+                    "type": "template",
+                    "template": {
+                        "name": name,
+                        "language": {"code": language},
+                        "components": [
+                            {
+                                "type": "body",
+                                "parameters": [
+                                    {"type": "text", "text": template_param(p)} for p in params
+                                ],
+                            }
+                        ],
+                    },
                 },
             )
         r.raise_for_status()

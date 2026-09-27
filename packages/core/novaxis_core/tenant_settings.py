@@ -117,6 +117,10 @@ class TenantSettings(BaseModel):
             if not pid.isdigit():
                 raise ValueError("whatsapp phone_number_id is the number id from Meta (digits)")
             wa.config["phone_number_id"] = pid
+        if wa and wa.config.get("update_template") is not None:
+            from novaxis_core.channels.whatsapp import check_update_template
+
+            wa.config["update_template"] = check_update_template(wa.config["update_template"])
         return v
 
     @field_validator("privacy_url")

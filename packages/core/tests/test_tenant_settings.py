@@ -73,3 +73,30 @@ def test_whatsapp_number_id_must_be_digits() -> None:
             pack_id="hvac",
             channels={"whatsapp": {"enabled": True, "config": {"phone_number_id": "+44 7700"}}},
         )
+
+
+def test_whatsapp_update_template_is_a_meta_name_and_language() -> None:
+    def wa(t: object) -> TenantSettings:
+        return TenantSettings(
+            pack_id="hvac",
+            channels={"whatsapp": {"enabled": True, "config": {"update_template": t}}},
+        )
+
+    assert wa({"name": " novaxis_update "}).channels["whatsapp"].config["update_template"] == {
+        "name": "novaxis_update",
+        "language": "en_GB",
+    }
+    assert (
+        wa({"name": "x_1", "language": "en"})
+        .channels["whatsapp"]
+        .config["update_template"]["language"]
+        == "en"
+    )
+    for bad in (
+        {"name": "Novaxis Update"},
+        {"name": ""},
+        {"name": "ok", "language": "English"},
+        "x",
+    ):
+        with pytest.raises(ValidationError):
+            wa(bad)

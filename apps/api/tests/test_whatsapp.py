@@ -259,3 +259,113 @@ def test_one_customer_across_sms_and_whatsapp(client: TestClient) -> None:
         )
         wa_contact = s.scalar(select(Contact).where(Contact.phones.contains([f"+{sender}"])))
         assert wa_contact is not None and r.contact_id == wa_contact.id
+
+
+def _late_conversation(client: TestClient, template: dict[str, str] | None) -> tuple[Tenant, Any]:
+    """A WhatsApp conversation whose customer last wrote 25 hours ago."""
+    sender = _wa()
+    _post(client, _payload(_text(sender, "Can you come Monday?")))
+    with service_session() as s:
+        t = s.scalar(select(Tenant).where(Tenant.slug == "demo-hvac"))
+        assert t is not None
+        if template is not None:
+            settings = json.loads(json.dumps(t.settings))
+            settings["channels"]["whatsapp"]["config"]["update_template"] = template
+            t.settings = settings
+        conv_id = s.scalar(
+            select(Conversation.id)
+            .join(Contact, Contact.id == Conversation.contact_id)
+            .where(Contact.phones.contains([f"+{sender}"]))
+        )
+        s.execute(
+            update(Message)
+            .where(Message.conversation_id == conv_id)
+            .values(created_at=datetime.now(UTC) - timedelta(hours=25))
+        )
+        s.flush()
+        s.expunge(t)
+    return t, conv_id
+
+
+def _meta(sent: list[dict[str, Any]]) -> None:
+    def meta(req: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(req.content))
+        return httpx.Response(200, json={"messages": [{"id": f"wamid.{len(sent)}"}]})
+
+    register_adapter(WhatsAppAdapter(transport=httpx.MockTransport(meta)))
+
+
+def test_after_24_hours_the_message_goes_whole_inside_the_approved_template(
+    client: TestClient,
+) -> None:
+    sent: list[dict[str, Any]] = []
+    _meta(sent)
+    t, conv_id = _late_conversation(client, {"name": "novaxis_update", "language": "en_GB"})
+    res = _reply(
+        t, conv_id, "Reminder: your service is on Tue 3 Oct at 09:00.\n\nReply C to confirm."
+    )
+    assert res.ok, res.error
+    assert len(sent) == 1 and sent[0]["type"] == "template"
+    tpl = sent[0]["template"]
+    assert tpl["name"] == "novaxis_update" and tpl["language"] == {"code": "en_GB"}
+    params = [p["text"] for p in tpl["components"][0]["parameters"]]
+    assert params == [
+        "Wendy WhatsApp",
+        t.name,
+        "Reminder: your service is on Tue 3 Oct at 09:00. Reply C to confirm.",
+    ], "new lines are flattened, nothing is cut"
+    with service_session() as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None and conv.status != "waiting_human"
+        out = s.scalar(
+            select(Message).where(
+                Message.conversation_id == conv_id, Message.direction == "outbound"
+            )
+        )
+        assert out is not None and out.provider_ref == "wamid.1"
+        assert "\n\nReply C" in out.body, "the transcript keeps the message as written"
+        from novaxis_core.models import AuditLog
+
+        assert s.scalar(
+            select(AuditLog).where(
+                AuditLog.event == "whatsapp.template_sent", AuditLog.subject_id == out.id
+            )
+        )
+
+
+def test_a_message_too_long_for_the_template_goes_to_a_person_not_cut_short(
+    client: TestClient,
+) -> None:
+    sent: list[dict[str, Any]] = []
+    _meta(sent)
+    t, conv_id = _late_conversation(client, {"name": "novaxis_update"})
+    res = _reply(t, conv_id, "word " * 200)
+    assert not res.ok and "too long" in (res.error or "")
+    assert sent == []
+    with service_session() as s:
+        assert s.get(Conversation, conv_id).status == "waiting_human"  # type: ignore[union-attr]
+
+
+def test_a_queued_message_outside_24_hours_goes_to_a_person_at_once_not_retried(
+    client: TestClient,
+) -> None:
+    from novaxis_core.scheduling import _enqueue_send
+    from novaxis_worker.loop import _handle_send_message
+
+    sent: list[dict[str, Any]] = []
+    _meta(sent)
+    t, conv_id = _late_conversation(client, None)  # no approved template
+    with tenant_session(t.id) as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        job = _enqueue_send(s, t, conv, "Your appointment has been cancelled.")
+        _handle_send_message(s, t, job)  # does not raise, so the job ends: no retries
+        assert "to a person" in (job.last_error or "")
+        assert conv.status == "waiting_human"
+    assert sent == []
+    with service_session() as s:
+        assert s.scalar(
+            select(Job).where(
+                Job.kind == "alert_staff", Job.payload["url"].astext == f"/conversations/{conv_id}"
+            )
+        )
