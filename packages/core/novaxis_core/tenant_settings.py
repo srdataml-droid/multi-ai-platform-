@@ -66,6 +66,17 @@ class TenantSettings(BaseModel):
         "at any time. How can I help?"
     )
     pack: dict[str, Any] = Field(default_factory=dict, description="Pack-specific settings")
+    retention_days: int = Field(
+        default=730,
+        ge=30,
+        le=3650,
+        description="Customers with no conversation or booking for this many days are deleted, "
+        "with their messages, bookings and photos. Set it from your own retention policy.",
+    )
+    privacy_url: str | None = Field(
+        default=None,
+        description="Your privacy notice. Linked in the assistant's first reply to each customer.",
+    )
     widget_origins: list[str] = Field(
         default_factory=list,
         description="Websites allowed to host the chat widget, e.g. https://www.example.co.uk. "
@@ -79,6 +90,16 @@ class TenantSettings(BaseModel):
         bad = set(v) - allowed
         if bad:
             raise ValueError(f"unknown weekday keys: {sorted(bad)}")
+        return v
+
+    @field_validator("privacy_url")
+    @classmethod
+    def _privacy_url(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        v = v.strip()
+        if not re.fullmatch(r"https://[^\s<>\"']+", v):
+            raise ValueError("the privacy notice link must start with https://")
         return v
 
     @field_validator("widget_origins")

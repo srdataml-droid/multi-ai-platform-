@@ -24,3 +24,13 @@ def test_bad_risk_override_rejected() -> None:
 def test_unknown_top_level_key_rejected() -> None:
     with pytest.raises(ValidationError):
         TenantSettings.model_validate({"pack_id": "hvac", "typo_field": 1})
+
+
+def test_retention_and_privacy_link_are_validated() -> None:
+    ts = TenantSettings(pack_id="hvac")
+    assert ts.retention_days == 730 and ts.privacy_url is None
+    assert TenantSettings(pack_id="hvac", privacy_url=" ").privacy_url is None
+    with pytest.raises(ValidationError):
+        TenantSettings(pack_id="hvac", retention_days=5)
+    with pytest.raises(ValidationError):
+        TenantSettings(pack_id="hvac", privacy_url="javascript:alert(1)")

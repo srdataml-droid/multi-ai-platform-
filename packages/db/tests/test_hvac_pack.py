@@ -55,7 +55,7 @@ def test_hvac_evals_all_pass_with_scripted_model(hvac: Tenant) -> None:
     from run import run_pack  # evals/run.py
 
     outcomes = run_pack("hvac", real=False)
-    assert len(outcomes) == 5
+    assert len(outcomes) == 6
     failed = {o.name: o.failures for o in outcomes if not o.passed}
     assert not failed, failed
 

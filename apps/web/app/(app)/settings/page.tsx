@@ -134,6 +134,16 @@ export default function SettingsPage() {
           {((st.widget_origins as string[] | undefined) ?? []).length ? "Only these websites can use your chat box." : "Empty: any website could copy your chat box. Add your own website address to stop that."} Press Save all at the top.
         </p>
       </Card>
+      <Card title="Customer data">
+        <label className="block text-sm">Delete a customer after this many days with no conversation or booking
+          <input data-testid="retention-days" type="number" min={30} max={3650} className="mt-1 w-40 rounded border border-slate-300 px-2 py-1 text-sm" value={(st.retention_days as number | undefined) ?? 730} onChange={(e) => update({ retention_days: Number(e.target.value) })} />
+        </label>
+        <p className="mt-1 text-xs text-slate-500">Their messages, bookings and photos go with them. Choose this from your own retention policy.</p>
+        <label className="mt-3 block text-sm">Link to your privacy notice (shown in the first reply to each customer)
+          <input data-testid="privacy-url" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="https://www.yourbusiness.co.uk/privacy" value={(st.privacy_url as string | null | undefined) ?? ""} onChange={(e) => update({ privacy_url: e.target.value || null })} />
+        </label>
+        <p className="mt-1 text-xs text-slate-500">To answer a customer&apos;s request for their data, or to delete it, use Export or Erase on the Contacts page. Press Save all at the top.</p>
+      </Card>
     </div>
   );
 }

@@ -45,6 +45,8 @@ class BlobStore(Protocol):
 
     def url_for(self, key: str, expires_seconds: int = 3600) -> str: ...
 
+    def delete(self, key: str) -> None: ...
+
 
 def media_key(
     tenant_id: uuid.UUID,
@@ -99,6 +101,11 @@ class LocalBlobStore:
         # Served by the API to authenticated staff (routes_media).
         return f"/media/{key}"
 
+    def delete(self, key: str) -> None:
+        p = self._path(key)
+        p.unlink(missing_ok=True)
+        p.with_suffix(p.suffix + ".type").unlink(missing_ok=True)
+
 
 class SupabaseBlobStore:
     """Supabase Storage over its REST API. Bucket must exist and be private.
@@ -147,6 +154,12 @@ class SupabaseBlobStore:
         r.raise_for_status()
         signed = str(r.json().get("signedURL", ""))
         return signed if signed.startswith("http") else f"{self.base_url}/storage/v1{signed}"
+
+    def delete(self, key: str) -> None:
+        with self._client() as c:
+            r = c.delete(f"{self.base_url}/storage/v1/object/{self.bucket}/{key}")
+        if r.status_code != 404:  # already gone is fine
+            r.raise_for_status()
 
 
 @lru_cache(maxsize=1)

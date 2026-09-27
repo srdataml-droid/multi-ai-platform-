@@ -31,6 +31,16 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest -q
+      # Golden conversations with the scripted model: deterministic and free. Fails the build
+      # when a pack drops below evals/thresholds.yaml. The real model runs by hand only
+      # (`make evals-real`), since it costs money.
+      - name: Evals
+        run: |
+          uv run alembic -c packages/db/alembic.ini upgrade head
+          uv run python evals/run.py
+        env:
+          NOVAXIS_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@localhost:5432/novaxis_test
+          NOVAXIS_LLM_PROVIDER: fake
 
   web:
     runs-on: ubuntu-latest

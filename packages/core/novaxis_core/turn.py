@@ -403,6 +403,9 @@ def run_turn(
             .replace("{business_name}", tenant.name)
             .strip()
         )
+        privacy = str(tenant.settings.get("privacy_url") or "").strip()
+        if privacy:
+            disclosure = f"{disclosure} How we use your details: {privacy}".strip()
         if disclosure:
             reply_text = f"{disclosure}\n\n{reply_text}"
 

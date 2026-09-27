@@ -1,0 +1,44 @@
+# Compliance controls
+
+Each control the platform enforces, and the test that proves it. A control without a test is
+listed as open. This is an engineering checklist, not legal advice: every business using the
+platform is the controller of its customers' data and needs its own adviser's sign-off
+[VERIFY with a UK data-protection adviser before the first real business].
+
+## In place
+
+| Control | How | Test |
+|---|---|---|
+| One business can never read, change or add another's rows | Postgres RLS on every tenant table, forced, one policy | `packages/db/tests/test_rls.py` (all), `test_every_tenant_table_has_forced_rls_and_a_policy` |
+| Platform-only tables are closed to the app | Forced RLS, no policy, no grant | `test_service_only_tables_are_closed_to_the_app_role` |
+| The conversation record cannot be rewritten | App role has no UPDATE or DELETE on messages; audit log is insert-only | `test_messages_cannot_be_updated`, `test_messages_cannot_be_deleted`, `test_audit_record_writes_and_is_immutable` |
+| Health details are encrypted at rest and shown by role | Fernet on the pack's sensitive intake keys | `packages/core/tests/test_sensitive.py` (all) |
+| An SMS or email "STOP" is honoured on that channel | Consent flips to opted-out, confirmation sent, nothing more sent | `test_stop_flips_consent_sends_confirmation_and_creates_no_job`, `test_send_refuses_opted_out_contact`, `test_opted_out_contact_is_not_answered_until_start` |
+| "Cancel" with a booking cancels the booking, not the customer | Opt-out words per channel | `test_cancel_by_text_cancels_the_booking_not_the_customer`, `test_stop_on_web_chat_is_just_a_message`, eval `hvac/06_cancel_on_chat_is_not_an_opt_out` |
+| Customers are told they are talking to an AI, and where the privacy notice is | Disclosure and `privacy_url` in the first reply | `test_disclosure_only_on_first_reply`, `test_first_reply_links_the_business_privacy_notice` |
+| Access request: everything held about one customer, nothing about anyone else | `GET /contacts/{id}/export`, owners only, audited | `test_export_holds_everything_for_one_customer_and_nothing_for_another`, `test_only_owners_export_or_erase_and_never_with_a_booking_to_come` |
+| Erasure: one customer and everything that names them, including photos | `POST /contacts/{id}/erase`, owners only, typed confirmation, refused while a booking is still to come | `test_erasure_removes_one_customer_everywhere_and_touches_no_one_else`, `test_only_owners_export_or_erase_and_never_with_a_booking_to_come` |
+| Retention: customers with no activity for `retention_days` are erased | Daily `retention_purge` job per business | `test_purge_takes_only_customers_past_retention_and_only_in_that_business`, `test_the_purge_is_queued_once_a_day_per_business` |
+| Webhook replays do nothing | Provider reference is unique per message | `test_replayed_webhook_is_a_noop` |
+| Public endpoints are rate limited; the widget can be restricted to the business's own websites | Postgres counters shared by every instance; `widget_origins` | `test_login_attempts_are_limited`, `test_chat_messages_are_limited_per_visitor`, `test_a_business_can_restrict_which_websites_host_its_widget` |
+| Security headers | CSP and frame blocking on the dashboard, nosniff and frame blocking on the API | `test_api_responses_carry_security_headers` |
+| Risky actions wait for a person; safeguarding stops the assistant | One pure approval gate, table-tested | `packages/core/tests/test_gate.py::test_gate_table` |
+
+## What erasure keeps
+
+The audit log is insert-only and is not erased. Its rows hold event names, ids, times and
+counts. A cancellation reason typed by a customer (first 200 characters) is the one place
+customer words can appear [VERIFY whether that is acceptable, or redact it on erasure].
+Daily metrics are counts with no personal data. Anything already copied into the business's
+own booking software or calendar is outside the platform and must be deleted there.
+
+## Open
+
+| Control | Why open | Owner |
+|---|---|---|
+| Privacy notice and terms for Novaxis itself | Legal text; needs an adviser | Founder |
+| ICO registration (data protection fee) | Paid registration | Founder |
+| DPIA for dental (special category data) | Needs an adviser | Founder, before the first dental business |
+| Processor agreement records (Twilio, Postmark, Anthropic, Supabase, Vercel) and regulated-data mode | Build plan Chunk 12, second half; needs the chosen vendors first | Founder chooses vendors, then build |
+| Retention of the audit log itself | Needs a policy decision | Founder with adviser |
+| Consent history (a ledger of each change) | Today only the current consent state is stored, with its source and time | Build when a business needs it |

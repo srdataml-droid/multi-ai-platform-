@@ -37,6 +37,7 @@ from novaxis_core.models import AuditLog, Conversation, Job, Tenant
 from novaxis_core.notify import notify_staff
 from novaxis_core.outbound import send_message
 from novaxis_core.packspec import PackSpec
+from novaxis_core.privacy import PURGE_KIND, enqueue_purges, purge_expired
 from novaxis_core.settings import get_settings
 from novaxis_core.turn import run_turn
 from novaxis_core.workflows import run_step
@@ -147,12 +148,22 @@ def _handle_alert(session: Session, tenant: Tenant, job: Job) -> None:
     job.last_error = f"delivered {n}"
 
 
+def _handle_purge(session: Session, tenant: Tenant, job: Job) -> None:
+    # Erasure needs the service role (messages are append-only for the app role); every
+    # statement inside is filtered by this tenant.
+    with service_session() as svc:
+        t = svc.get(Tenant, tenant.id)
+        n = purge_expired(svc, t) if t is not None else 0
+    job.last_error = f"erased {n}"
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
         ROLLUP_KIND: _handle_rollup,
         REPORT_USAGE_KIND: _handle_report_usage,
         BRIDGE_EMAIL_KIND: _handle_bridge_email,
         ALERT_JOB: _handle_alert,
+        PURGE_KIND: _handle_purge,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
@@ -237,6 +248,7 @@ def periodic(session: Session) -> None:
     enqueue_rollups(session, ids)
     enqueue_usage_reports(session, now)
     expire_stale_proposals(session, now)
+    enqueue_purges(session, ids)
 
 
 def tick(handlers: dict[str, Handler], worker_id: str) -> bool:

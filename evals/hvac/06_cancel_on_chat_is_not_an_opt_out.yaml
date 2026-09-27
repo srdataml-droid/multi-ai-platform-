@@ -1,0 +1,12 @@
+name: a customer who types "cancel" in web chat gets help cancelling, not an unsubscribe
+turns:
+  - "cancel"
+script:
+  - text: "Of course. Which booking would you like to cancel?"
+    calls: []
+expect:
+  # Web chat has no opt-out words: the visitor is in the conversation by choice. Before the
+  # fix, "cancel" unsubscribed them, closed the conversation and silenced the assistant.
+  status: waiting_customer
+  reply_contains: ["Which booking would you like to cancel"]
+  reply_never_contains: ["unsubscribed"]

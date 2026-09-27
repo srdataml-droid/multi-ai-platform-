@@ -27,6 +27,12 @@ def hvac(migrated: str) -> Tenant:
         return t
 
 
+def _webchat_only(settings: dict) -> dict:  # type: ignore[type-arg]
+    """A test business's settings without demo-hvac's SMS number and inbound address, which
+    would make inbound routing ambiguous for every later test."""
+    return {**settings, "channels": {"webchat": settings["channels"]["webchat"]}}
+
+
 def _webchat(body: str, visitor: str) -> NormalisedInbound:
     return NormalisedInbound(
         channel="webchat",
@@ -265,7 +271,10 @@ def test_owner_braces_in_the_disclosure_do_not_break_replies(hvac: Tenant) -> No
             slug=f"brace-{uuid.uuid4().hex[:8]}",
             pack_id="hvac",
             status="active",
-            settings={**hvac.settings, "disclosure_text": "Hi {first name}, {business_name} AI."},
+            settings={
+                **_webchat_only(hvac.settings),
+                "disclosure_text": "Hi {first name}, {business_name} AI.",
+            },
         )
         s.add(t)
         s.flush()
@@ -350,7 +359,7 @@ def test_auto_confirm_follows_the_booked_service_not_the_models_word(hvac: Tenan
             slug=f"auto-{uuid.uuid4().hex[:8]}",
             pack_id="hvac",
             status="active",
-            settings=settings,
+            settings=_webchat_only(settings),
         )
         s.add(t)
         s.flush()
@@ -440,3 +449,28 @@ def test_a_reply_that_fails_to_send_is_retried_then_handed_to_a_person(hvac: Ten
         conv = s.get(Conversation, conv_id)
         assert job is not None and job.state == "failed"
         assert conv is not None and conv.status == "waiting_human", "a person takes over"
+
+
+def test_first_reply_links_the_business_privacy_notice(hvac: Tenant) -> None:
+    with service_session() as s:
+        t = Tenant(
+            name="Private Heating",
+            slug=f"priv-{uuid.uuid4().hex[:8]}",
+            pack_id="hvac",
+            status="active",
+            settings={
+                **hvac.settings,
+                "channels": {},
+                "privacy_url": "https://example.co.uk/privacy",
+            },
+        )
+        s.add(t)
+        s.flush()
+        s.expunge(t)
+    with tenant_session(t.id) as s:
+        conv_id = ingest(s, t, _webchat("hello", uuid.uuid4().hex[:12])).conversation_id
+    with tenant_session(t.id) as s:
+        r = run_turn(s, t, get_pack("hvac"), FakeLLM(script=[("How can I help?", [])]), conv_id)
+        reply = s.get(Message, r.reply_message_id)
+        assert reply is not None
+        assert "https://example.co.uk/privacy" in reply.body.split("\n\n")[0]

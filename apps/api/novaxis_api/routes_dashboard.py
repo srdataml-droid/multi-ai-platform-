@@ -17,6 +17,7 @@ from novaxis_core.contacts import merge, possible_duplicates
 from novaxis_core.llm import build_llm
 from novaxis_core.models import (
     ActionProposal,
+    Appointment,
     AuditLog,
     Contact,
     Conversation,
@@ -25,8 +26,10 @@ from novaxis_core.models import (
     MetricsDaily,
     Tenant,
 )
+from novaxis_core.privacy import erase_contact, export_contact
 from novaxis_core.sensitive import reveal
 from novaxis_core.turn import build_messages, record_usage, tenant_facts
+from novaxis_db.session import service_session
 from novaxis_packs import get_pack
 
 router = APIRouter(tags=["dashboard"])
@@ -421,3 +424,72 @@ def suggest(
     )
     record_usage(session, tenant, conv.id, "suggest", result)
     return {"suggestion": result.text}
+
+
+OWNERS = {"owner", "operator"}
+
+
+@router.get("/contacts/{contact_id}/export")
+def export_one(
+    contact_id: uuid.UUID, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Everything held about one customer, for a subject access request. Owners only."""
+    if principal.role not in OWNERS:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "owner only")
+    c = session.get(Contact, contact_id)
+    if c is None or c.merged_into is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contact not found")
+    tenant = session.get(Tenant, principal.tenant_id)
+    assert tenant is not None
+    data = export_contact(session, c, get_pack(tenant.pack_id).sensitive_keys)
+    session.add(
+        AuditLog(
+            tenant_id=principal.tenant_id,
+            actor=f"user:{principal.user_id}",
+            event="contact.exported",
+            subject_table="contacts",
+            subject_id=c.id,
+            diff={},
+        )
+    )
+    return data
+
+
+class EraseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirm: str = Field(description='Must be "ERASE"')
+
+
+@router.post("/contacts/{contact_id}/erase")
+def erase_one(
+    contact_id: uuid.UUID, body: EraseBody, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Delete a customer and everything that names them (right to erasure). Owners only,
+    and not while they have a booking still to come."""
+    if principal.role not in OWNERS:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "owner only")
+    if body.confirm != "ERASE":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "type ERASE to confirm")
+    c = session.get(Contact, contact_id)
+    if c is None or c.merged_into is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contact not found")
+    upcoming = session.scalar(
+        select(Appointment.id)
+        .where(
+            Appointment.contact_id == c.id,
+            Appointment.status == "confirmed",
+            Appointment.starts_at >= datetime.now(UTC),
+        )
+        .limit(1)
+    )
+    if upcoming is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "cancel their upcoming booking first, then erase"
+        )
+    # Messages are append-only for the app role, so erasure runs as the service role with
+    # the tenant filter applied inside erase_contact.
+    with service_session() as svc:
+        counts = erase_contact(
+            svc, principal.tenant_id, c.id, f"user:{principal.user_id}", "erasure request"
+        )
+    return {"erased": counts}

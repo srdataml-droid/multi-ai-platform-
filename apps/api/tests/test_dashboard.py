@@ -230,3 +230,49 @@ def test_phone_numbers_are_normalised_for_matching() -> None:
     assert normalize_phone("12345") is None
     assert normalize_email(" Jo@Example.co.uk ") == "jo@example.co.uk"
     assert normalize_email("not an email") is None
+
+
+def test_only_owners_export_or_erase_and_never_with_a_booking_to_come(
+    client: TestClient,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from novaxis_core.models import Appointment, Contact
+
+    conv_id = _conv("please delete my data")
+    with service_session() as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        cid, tid = conv.contact_id, conv.tenant_id
+    viewer = _h("dev|viewer@demo-hvac")
+    assert client.get(f"/contacts/{cid}/export", headers=viewer).status_code == 403
+    exp = client.get(f"/contacts/{cid}/export", headers=_h())
+    assert exp.status_code == 200
+    assert "please delete my data" in str(exp.json()["conversations"])
+    erase = f"/contacts/{cid}/erase"
+    assert client.post(erase, json={"confirm": "ERASE"}, headers=viewer).status_code == 403
+    assert client.post(erase, json={"confirm": "yes"}, headers=_h()).status_code == 400
+    start = datetime.now(UTC) + timedelta(days=2)
+    with tenant_session(tid) as s:
+        a = Appointment(
+            tenant_id=tid,
+            contact_id=cid,
+            conversation_id=conv_id,
+            starts_at=start,
+            ends_at=start + timedelta(hours=1),
+            service_code="repair_visit",
+            status="confirmed",
+        )
+        s.add(a)
+        s.flush()
+        aid = a.id
+    assert client.post(erase, json={"confirm": "ERASE"}, headers=_h()).status_code == 409
+    with tenant_session(tid) as s:
+        appt = s.get(Appointment, aid)
+        assert appt is not None
+        appt.status = "cancelled"
+    r = client.post(erase, json={"confirm": "ERASE"}, headers=_h())
+    assert r.status_code == 200 and r.json()["erased"]["messages"] >= 1
+    with service_session() as s:
+        assert s.get(Contact, cid) is None and s.get(Conversation, conv_id) is None
+    assert client.get(f"/contacts/{cid}/export", headers=_h()).status_code == 404

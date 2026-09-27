@@ -239,7 +239,7 @@ Built into code, not policy documents:
 - **Previews**: Vercel previews behind Vercel Authentication, against the same database. There is no separate staging database yet.
 - **Release**: CI promotes a commit to the `production` branch only after lint, types, unit, RLS and browser tests pass. Vercel's production branch must be set to `production` for that to gate the live site (a dashboard setting; see `docs/RUNBOOK.md`).
 - **Monitoring**: `GET /health/deep` (database, stuck and failed jobs, undelivered emergency alerts, schema at head), checked every 15 minutes by `.github/workflows/monitor.yml`. Incident steps are in `docs/RUNBOOK.md`.
-- **CI**: GitHub Actions. Lint, type check, unit tests, RLS test, browser tests on every push.
+- **CI**: GitHub Actions. Lint, type check, unit tests, RLS test, scripted-model evals and browser tests on every push. Real-model evals run by hand (`make evals-real`).
 
 ## 14. Cost shape
 
