@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     LargeBinary,
@@ -426,6 +427,33 @@ class BillingEvent(Base):
     received_at: Mapped[datetime] = _created_at()
 
 
+class StockCountRow(Base):
+    """One stock photo: what the network counted and what staff confirmed. The confirmed
+    count is the training label for the stock counter (docs/ml.md)."""
+
+    __tablename__ = "stock_counts"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant_fk()
+    product: Mapped[str] = mapped_column(String(120), nullable=False)
+    photo_key: Mapped[str | None] = mapped_column(String(300))
+    predicted: Mapped[int | None] = mapped_column(Integer)
+    raw: Mapped[float | None] = mapped_column(Float)
+    points: Mapped[list[list[int]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    model: Mapped[str | None] = mapped_column(String(60))
+    synthetic_model: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    confirmed: Mapped[int | None] = mapped_column(Integer)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created_at()
+
+
 # Tables that carry tenant_id and therefore get an RLS policy. The migration and
 # the RLS test both iterate this list, so a new table cannot be forgotten.
 TENANT_TABLES: tuple[str, ...] = (
@@ -444,6 +472,7 @@ TENANT_TABLES: tuple[str, ...] = (
     "usage_events",
     "bridge_tickets",
     "push_subscriptions",
+    "stock_counts",
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")

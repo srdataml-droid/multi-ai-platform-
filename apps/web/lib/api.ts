@@ -12,7 +12,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (init.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  // A photo upload (FormData) sets its own multipart boundary; everything else is JSON.
+  if (init.body && !(init.body instanceof FormData) && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   const r = await fetch(`/api${path}`, { ...init, headers, cache: "no-store" });
   if (r.status === 401) {
     setToken(null);

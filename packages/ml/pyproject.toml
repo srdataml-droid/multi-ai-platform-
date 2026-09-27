@@ -3,7 +3,7 @@ name = "novaxis-ml"
 version = "0.0.0"
 description = "Training pipelines for Novaxis models. Runs on a laptop or in CI, never in the API."
 requires-python = ">=3.12"
-dependencies = ["novaxis-core", "novaxis-db", "numpy>=2.0", "scikit-learn>=1.5"]
+dependencies = ["novaxis-core", "novaxis-db", "numpy>=2.0", "scikit-learn>=1.5", "pillow>=10.4"]
 
 [build-system]
 requires = ["hatchling"]

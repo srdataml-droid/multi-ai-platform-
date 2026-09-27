@@ -22,6 +22,7 @@ const LINKS = [
   ["/approvals", "Approvals"],
   ["/contacts", "Contacts"],
   ["/schedule", "Schedule"],
+  ["/stock", "Stock"],
   ["/analytics", "Analytics"],
   ["/settings", "Settings"],
   ["/onboarding", "Setup"],

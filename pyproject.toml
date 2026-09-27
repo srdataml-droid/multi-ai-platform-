@@ -19,6 +19,9 @@ dependencies = [
   "pyjwt>=2.9",
   "python-multipart>=0.0.9",
   "pywebpush>=2.0",
+  "numpy>=2.0",
+  "pillow>=10.4",
+  "onnxruntime>=1.19",
 ]
 
 [tool.vercel]
@@ -63,5 +66,11 @@ asyncio_mode = "auto"
 testpaths = ["apps", "packages"]
 
 [[tool.mypy.overrides]]
-module = ["pywebpush", "py_vapid", "sklearn", "sklearn.*"]
+module = ["pywebpush", "py_vapid", "sklearn", "sklearn.*", "onnxruntime", "torch", "torch.*", "torchvision", "torchvision.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# PyTorch is installed only where the stock counter is trained (stock-requirements.txt);
+# in the workspace its types are unknown, so subclassing torch classes cannot be checked.
+module = ["novaxis_ml.stock.model", "novaxis_ml.stock.train"]
+disallow_subclassing_any = false

@@ -28,6 +28,7 @@ from novaxis_api.routes_onboarding import router as onboarding_router
 from novaxis_api.routes_operator import router as operator_router
 from novaxis_api.routes_settings import router as settings_router
 from novaxis_api.routes_signup import router as signup_router
+from novaxis_api.routes_stock import router as stock_router
 from novaxis_core.settings import get_settings
 from novaxis_core.version import build_info
 
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(onboarding_router)
     app.include_router(billing_router)
     app.include_router(operator_router)
+    app.include_router(stock_router)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]

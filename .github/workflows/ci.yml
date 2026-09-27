@@ -60,6 +60,23 @@ jobs:
       - run: node --test --experimental-strip-types app/*.test.ts
       - run: npm run build
 
+  # The stock counter trains with PyTorch, which is not a workspace dependency (several GB).
+  # This job installs the CPU build and proves training still exports a network the API
+  # can serve. The API itself runs the exported file with ONNX Runtime (python job).
+  vision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+      - run: pip install -r packages/ml/stock-requirements.txt pytest
+      - name: Train a small counter, export it, run it through the serving code
+        run: python -m pytest -q --noconftest -p no:cacheprovider packages/ml/tests/test_stock_pipeline.py
+        env:
+          PYTHONPATH: packages/ml:packages/core
+
   e2e:
     runs-on: ubuntu-latest
     services:
@@ -116,7 +133,7 @@ jobs:
   # to main build previews only. See docs/RUNBOOK.md.
   promote:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [python, web, e2e]
+    needs: [python, web, e2e, vision]
     runs-on: ubuntu-latest
     permissions:
       contents: write
