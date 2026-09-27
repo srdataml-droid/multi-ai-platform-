@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { AlertsCard } from "@/components/AlertsCard";
 import { BookingBridgeCard } from "@/components/BookingBridge";
 import { api, post, put } from "@/lib/api";
 
@@ -112,6 +113,7 @@ export default function SettingsPage() {
         <p className="text-sm">System of record: <strong>{integ?.system_of_record ?? "…"}</strong></p>
         <ul className="mt-2 text-sm">{(integ?.items ?? []).map((i) => <li key={i.id} className="flex justify-between border-t border-slate-100 py-1"><span>{i.provider}</span><span className="flex gap-2"><Badge tone={i.health === "connected" ? "green" : "slate"}>{i.health}</Badge>{i.health === "connected" && <button className="text-xs text-red-600" onClick={() => post(`/integrations/${i.id}/disconnect`).then(load)}>disconnect</button>}</span></li>)}</ul>
       </Card>
+      <AlertsCard />
       <BookingBridgeCard onChange={load} />
       <Card title="Staff">
         <ul className="text-sm">{staff.map((u) => <li key={u.id} className="flex justify-between border-t border-slate-100 py-1"><span>{u.email}</span>

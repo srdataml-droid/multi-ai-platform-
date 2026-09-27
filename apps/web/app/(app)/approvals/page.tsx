@@ -15,6 +15,8 @@ export default function ApprovalsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
+  // Approved but could not be done: kept on screen so the person knows to follow up.
+  const [failed, setFailed] = useState<Record<string, string>>({});
 
   const decide = async (p: Proposal, decision: "approve" | "reject" | "edit") => {
     setBusy(p.id);
@@ -22,7 +24,11 @@ export default function ApprovalsPage() {
     try {
       const body: Record<string, unknown> = { decision };
       if (decision === "edit") body.params = JSON.parse(editing[p.id] ?? JSON.stringify(p.params));
-      await post(`/approvals/${p.id}`, body);
+      const r = await post<Record<string, unknown>>(`/approvals/${p.id}`, body);
+      const done = (r.proposal ?? r) as { state?: string; error?: string | null };
+      if (done.state === "failed") {
+        setFailed((f) => ({ ...f, [p.id]: done.error ?? "unknown error" }));
+      }
       setEditing((e) => { const n = { ...e }; delete n[p.id]; return n; });
       refresh();
     } catch (e) {
@@ -35,6 +41,12 @@ export default function ApprovalsPage() {
   return (
     <div className="flex flex-col gap-4">
       <ErrorLine error={error ?? err} />
+      {Object.entries(failed).map(([id, why]) => (
+        <p key={id} data-testid="approval-failed" className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">
+          Approved, but it could not be done: {why}. The conversation is now with your team; open it from the inbox to follow up with the customer.
+          <button className="ml-2 underline" onClick={() => setFailed((f) => { const n = { ...f }; delete n[id]; return n; })}>Dismiss</button>
+        </p>
+      ))}
       {data && !data.items.length && <Card title="Approvals"><p className="text-sm text-slate-500">Nothing waiting for a decision.</p></Card>}
       {(data?.items ?? []).map((p) => (
         <Card key={p.id} title={p.kind.replace(/_/g, " ")} actions={<Badge tone={p.risk === "high" ? "red" : "amber"}>{p.risk}</Badge>}>

@@ -5,12 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { exitTenant, getToken, setToken } from "@/lib/auth";
+import { setBusinessTimeZone } from "@/lib/format";
 
 type Me = {
   email: string;
   role: string;
   acting: boolean;
-  tenant: { slug: string; name: string; pack_id: string; status: string; plan: string; onboarded: boolean } | null;
+  tenant: { slug: string; name: string; pack_id: string; status: string; plan: string; onboarded: boolean; timezone: string; alerts_off: boolean } | null;
 };
 type Pack = { name: string; vocabulary: Record<string, string>; dashboard: { labels: Record<string, string> } };
 
@@ -40,7 +41,13 @@ export function Nav() {
       router.replace("/login");
       return;
     }
-    const loadMe = () => api<Me>("/me").then(setMe).catch(() => router.replace("/login"));
+    const loadMe = () =>
+      api<Me>("/me")
+        .then((m) => {
+          setBusinessTimeZone(m.tenant?.timezone);
+          setMe(m);
+        })
+        .catch(() => router.replace("/login"));
     loadMe();
     // Pages that change the tenant (billing, setup) ask the menu to re-read it.
     window.addEventListener(TENANT_CHANGED, loadMe);
@@ -84,6 +91,11 @@ export function Nav() {
           {menuOpen ? "Close" : "Menu"}
         </button>
       </header>
+      {!console_ && me?.tenant?.alerts_off && (me.role === "owner" || me.role === "staff") && !path.startsWith("/settings") && (
+        <Link href="/settings" data-testid="alerts-off" className="block bg-amber-100 px-4 py-2 text-xs text-amber-900 md:fixed md:bottom-4 md:right-4 md:z-50 md:max-w-xs md:rounded md:shadow">
+          <strong>Alerts are off.</strong> Nobody is told when a customer needs your team unless this page is open. Turn on alerts →
+        </Link>
+      )}
     <aside className={`${menuOpen ? "flex" : "hidden"} w-full shrink-0 flex-col border-b border-slate-200 bg-white p-4 md:flex md:w-56 md:border-b-0 md:border-r`}>
       <div className="mb-6">
         <div className="text-sm font-semibold">Novaxis Worker</div>

@@ -10,7 +10,7 @@ from novaxis_api.devtoken import mint
 from novaxis_api.main import create_app
 from novaxis_core.channels import NormalisedInbound
 from novaxis_core.inbound import ingest
-from novaxis_core.models import ActionProposal, Approval, Message, Tenant, User
+from novaxis_core.models import ActionProposal, Approval, Conversation, Message, Tenant, User
 from novaxis_db.seed import seed
 from novaxis_db.session import service_session, tenant_session
 
@@ -166,3 +166,17 @@ def test_deciding_twice_is_a_conflict(client: TestClient) -> None:
         client.post(f"/approvals/{pid}", json={"decision": "approve"}, headers=_owner()).status_code
         == 409
     )
+
+
+def test_an_approval_that_fails_says_so_and_stays_with_a_person(client: TestClient) -> None:
+    # A confirmation of an appointment that does not exist cannot be carried out.
+    pid, cid = _awaiting(
+        "confirm_appointment",
+        {"appointment_id": "00000000-0000-0000-0000-000000000000", "service_code": ""},
+    )
+    r = client.post(f"/approvals/{pid}", json={"decision": "approve"}, headers=_owner())
+    assert r.status_code == 200
+    assert r.json()["state"] == "failed" and r.json()["error"]
+    with service_session() as s:
+        conv = s.get(Conversation, cid)
+        assert conv is not None and conv.status == "waiting_human"

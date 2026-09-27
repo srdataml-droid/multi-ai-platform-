@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import needs_a_person
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.intake import out_of_area, prompt_block
@@ -120,7 +121,7 @@ def build_messages(history: list[Message]) -> list[dict[str, Any]]:
     return out
 
 
-def _record_usage(
+def record_usage(
     session: Session, tenant: Tenant, conv_id: uuid.UUID, task: str, r: LLMResult
 ) -> None:
     session.add(
@@ -273,6 +274,7 @@ def run_turn(
 
     if blocked_reason and not emergency:
         conv.status = "waiting_human"
+        needs_a_person(session, tenant.id, conv.id)
         _audit(
             session,
             tenant.id,
@@ -329,7 +331,7 @@ def run_turn(
             tools=pack.tools,
             max_tokens=1024,
         )
-        _record_usage(session, tenant, conv.id, "worker_turn", result)
+        record_usage(session, tenant, conv.id, "worker_turn", result)
         reply_text = result.text or FALLBACK_REPLY
         tool_calls = result.tool_calls
         followup_needed = False
@@ -415,6 +417,7 @@ def run_turn(
     elif reply_d.state == "rejected":
         # The model's words were refused. Say something fixed and safe, then hand over.
         conv.status = "waiting_human"
+        needs_a_person(session, tenant.id, conv.id)
         notice_p, notice_d = propose(
             session,
             tenant,
@@ -448,7 +451,7 @@ def run_turn(
             messages=build_messages(history + ([out] if out else [])),
             max_tokens=400,
         )
-        _record_usage(session, tenant, conv.id, "summarise", summary)
+        record_usage(session, tenant, conv.id, "summarise", summary)
         conv.summary = summary.text
     _audit(
         session,

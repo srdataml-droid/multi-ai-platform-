@@ -325,15 +325,19 @@ def _enqueue_send(session: Session, tenant: Tenant, conv: Conversation, text: st
 def schedule_appointment_steps(
     session: Session, tenant: Tenant, pack: Any, appt: Appointment, conv: Conversation
 ) -> int:
+    from novaxis_core.quiet_hours import before_if_quiet, later_if_quiet
     from novaxis_core.workflows import parse_delay
 
     now = datetime.now(UTC)
+    tz = tz_for(tenant, location_for(session, tenant))
     n = 0
     for step in pack.workflows:
         if step.trigger == "appointment_confirmed":
-            run_after = now + parse_delay(step.after)
+            run_after = later_if_quiet(now + parse_delay(step.after), tz)
         elif step.trigger == "before_appointment":
-            run_after = appt.starts_at - parse_delay(step.after)
+            run_after = before_if_quiet(
+                appt.starts_at - parse_delay(step.after), tz, appt.starts_at
+            )
             if run_after < now:
                 continue
         else:

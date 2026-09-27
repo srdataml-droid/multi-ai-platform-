@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import alert_staff, needs_a_person
 from novaxis_core.channels import get_adapter
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
 from novaxis_core.models import ActionProposal, Conversation, Tenant
@@ -35,8 +36,9 @@ def hand_to_human(
     conv = session.get(Conversation, conversation_id_of(proposal))
     if conv is None:
         return ExecResult(False, {}, "conversation not found")
-    if conv.status != "closed":
+    if conv.status not in ("closed", "waiting_human"):
         conv.status = "waiting_human"
+        needs_a_person(session, tenant.id, conv.id)
     return ExecResult(True, {"reason": params.reason[:200]})
 
 
@@ -66,7 +68,17 @@ def escalate_emergency(
                 sent.append(f"{channel}:{to}")
             except Exception as exc:  # noqa: BLE001 - keep trying the other contacts
                 failed.append(f"{channel}:{to}:{type(exc).__name__}")
-    if not contacts:
+    pushed = alert_staff(
+        session,
+        tenant,
+        "EMERGENCY: a customer needs you now",
+        "A customer reported an emergency. Open the conversation straight away.",
+        f"/conversations/{conv.id}" if conv is not None else "/inbox",
+        urgent=True,
+    )
+    if pushed:
+        sent.append(f"push:{pushed}")
+    if not contacts and not pushed:
         return ExecResult(False, {"sent": "", "failed": ""}, "tenant has no escalation contacts")
     ok = bool(sent)
     return ExecResult(

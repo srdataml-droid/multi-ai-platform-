@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Request, Response
 from starlette.concurrency import run_in_threadpool
 
+from novaxis_api.routes_alerts import router as alerts_router
 from novaxis_api.routes_appointments import router as appointments_router
 from novaxis_api.routes_approvals import router as approvals_router
 from novaxis_api.routes_auth import router as auth_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
         return build_info()
 
     app.include_router(me_router)
+    app.include_router(alerts_router)
     app.include_router(inbound_router)
     app.include_router(approvals_router)
     app.include_router(conversations_router)

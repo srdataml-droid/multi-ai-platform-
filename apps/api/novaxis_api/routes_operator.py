@@ -19,10 +19,20 @@ from sqlalchemy import and_, func, select
 
 from novaxis_api.auth import CurrentPrincipal, Principal
 from novaxis_api.devtoken import mint
+from novaxis_core.alerts import alert_channels_for_settings, alerts_off
 from novaxis_core.billing import HANDLERS, apply_event, demo_event, month_start, provider
 from novaxis_core.bridge import PROVIDER as BRIDGE
 from novaxis_core.bridge import bridge_health
-from novaxis_core.models import AuditLog, Conversation, Integration, Job, Message, Tenant, User
+from novaxis_core.models import (
+    AuditLog,
+    Conversation,
+    Integration,
+    Job,
+    Message,
+    PushSubscription,
+    Tenant,
+    User,
+)
 from novaxis_db.session import service_session
 
 router = APIRouter(prefix="/operator", tags=["operator"])
@@ -100,9 +110,20 @@ def list_tenants(principal: CurrentPrincipal) -> dict[str, Any]:
                 )
             )
         }
+        devices = per_tenant(
+            select(PushSubscription.tenant_id, func.count())
+            .where(PushSubscription.tenant_id.in_(ids))
+            .group_by(PushSubscription.tenant_id)
+        )
         items = []
         for t in tenants:
             problems = []
+            channels = {
+                **alert_channels_for_settings(t.settings),
+                "push_devices": devices.get(t.id, 0),
+            }
+            if alerts_off(channels):
+                problems.append("staff alerts off: nobody is told when a customer needs them")
             if t.id in bridges and not bridges[t.id].ok:
                 problems.append(bridges[t.id].detail)
             if failed.get(t.id):

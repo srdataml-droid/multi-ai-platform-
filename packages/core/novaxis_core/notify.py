@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import alert_staff
 from novaxis_core.channels import get_adapter
 from novaxis_core.models import ActionProposal, AuditLog, Job, Tenant, User
 from novaxis_core.settings import get_settings
@@ -25,13 +26,21 @@ def enqueue_staff_notification(session: Session, tenant: Tenant, proposal_id: uu
 
 
 def notify_staff(session: Session, tenant: Tenant, proposal_id: uuid.UUID) -> int:
-    """Email every owner and staff user. Returns how many emails were attempted."""
+    """Push to staff devices and email every owner and staff user. Returns how many alerts
+    were attempted."""
     proposal = session.get(ActionProposal, proposal_id)
     if proposal is None or proposal.state != "awaiting":
         return 0
+    pushed = alert_staff(
+        session,
+        tenant,
+        "Approval needed",
+        f"{proposal.kind.replace('_', ' ').capitalize()} is waiting for your decision.",
+        "/approvals",
+    )
     recipients = list(session.scalars(select(User).where(User.role.in_(["owner", "staff"]))))
     if not recipients:
-        return 0
+        return pushed
     s = get_settings()
     cfg = ((tenant.settings.get("channels") or {}).get("email") or {}).get("config") or {}
     body = (
@@ -60,7 +69,7 @@ def notify_staff(session: Session, tenant: Tenant, proposal_id: uuid.UUID) -> in
                 },
             )
         )
-        return 0
+        return pushed
     adapter = get_adapter("email")
     n = 0
     for u in recipients:
@@ -78,4 +87,4 @@ def notify_staff(session: Session, tenant: Tenant, proposal_id: uuid.UUID) -> in
             diff={"recipients": n, "delivered": True},
         )
     )
-    return n
+    return n + pushed

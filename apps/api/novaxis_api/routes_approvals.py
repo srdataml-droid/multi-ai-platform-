@@ -85,6 +85,17 @@ def _context_for(session: TenantDb, p: ActionProposal) -> GateContext:
     )
 
 
+def _after_failure(session: TenantDb, p: ActionProposal) -> None:
+    """The person who approved is looking at it, so the conversation stays with them rather
+    than going back to the worker, which would carry on as if it had worked."""
+    if p.state != "failed" or p.conversation_id is None:
+        return
+    conv = session.get(Conversation, p.conversation_id)
+    if conv is not None and conv.status != "closed":
+        conv.status = "waiting_human"
+    session.flush()
+
+
 @router.post("/{proposal_id}")
 def decide_one(
     proposal_id: uuid.UUID, body: DecisionIn, principal: CurrentPrincipal, session: TenantDb
@@ -128,6 +139,7 @@ def decide_one(
         p.state = "approved"
         session.flush()
         execute(session, tenant, p)
+        _after_failure(session, p)
         return _serialise(p)
 
     # edit
@@ -150,5 +162,6 @@ def decide_one(
     p.superseded_by = new.id
     if new.state == "approved":
         execute(session, tenant, new)
+        _after_failure(session, new)
     session.flush()
     return {"replaced": _serialise(p), "proposal": _serialise(new)}

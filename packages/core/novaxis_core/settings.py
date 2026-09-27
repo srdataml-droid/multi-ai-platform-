@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     # Self-serve sign-up. The cap stops a leaked demo passcode from filling the database.
     signup_max_tenants: int = 50
     inbound_email_domain: str = "inbound.novaxis.test"
+    # Staff alerts by browser push (Web Push). Keys: `python -m novaxis_core.alerts_keys`.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
+    # An approval nobody decides within this many hours expires and the team is told.
+    proposal_expiry_hours: int = 72
+    # Follow-ups and reminders are not sent between these local times.
+    quiet_hours_start: str = "20:00"
+    quiet_hours_end: str = "08:00"
     # Worker loop.
     worker_id: str = ""
     worker_lease_seconds: int = 600

@@ -27,6 +27,7 @@ from novaxis_core.models import (
     Tenant,
 )
 from novaxis_core.packspec import PackSpec
+from novaxis_core.quiet_hours import later_if_quiet
 
 _DURATION = re.compile(r"^(\d+)([mhd])$")
 
@@ -58,6 +59,9 @@ def schedule_idle_steps(
     ):
         old.state = "done"
         old.last_error = "superseded by a newer reply"
+    from novaxis_core.scheduling import location_for, tz_for
+
+    tz = tz_for(tenant, location_for(session, tenant))
     jobs: list[Job] = []
     for step in pack.workflows:
         if step.trigger != "conversation_idle":
@@ -70,7 +74,7 @@ def schedule_idle_steps(
                 "step_id": step.id,
                 "anchor": now.isoformat(),
             },
-            run_after=now + parse_delay(step.after),
+            run_after=later_if_quiet(now + parse_delay(step.after), tz),
         )
         session.add(job)
         jobs.append(job)

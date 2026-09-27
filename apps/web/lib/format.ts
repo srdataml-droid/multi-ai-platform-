@@ -1,7 +1,15 @@
-export function when(iso: string | null | undefined): string {
+// Times are the business's, not the viewer's: an owner abroad (or an operator in another
+// country) must see the same 10:00 the customer was offered. Nav sets this from /me.
+let businessTimeZone: string | undefined;
+
+export function setBusinessTimeZone(tz: string | undefined): void {
+  businessTimeZone = tz;
+}
+
+export function when(iso: string | null | undefined, tz: string | undefined = businessTimeZone): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleString(undefined, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("en-GB", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz });
 }
 
 export function ago(iso: string | null | undefined): string {

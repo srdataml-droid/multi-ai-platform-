@@ -19,6 +19,8 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import ALERT_JOB, alert_staff, needs_a_person
+from novaxis_core.approvals import expire_stale_proposals
 from novaxis_core.billing import (
     REPORT_USAGE_KIND,
     StripeClient,
@@ -139,11 +141,18 @@ def _handle_bridge_email(session: Session, tenant: Tenant, job: Job) -> None:
     job.last_error = send_ticket_email(session, tenant, uuid.UUID(job.payload["ticket_id"]))
 
 
+def _handle_alert(session: Session, tenant: Tenant, job: Job) -> None:
+    p = job.payload
+    n = alert_staff(session, tenant, str(p["title"]), str(p["body"]), str(p["url"]))
+    job.last_error = f"delivered {n}"
+
+
 def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[str, Handler]:
     return {
         ROLLUP_KIND: _handle_rollup,
         REPORT_USAGE_KIND: _handle_report_usage,
         BRIDGE_EMAIL_KIND: _handle_bridge_email,
+        ALERT_JOB: _handle_alert,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),
         "send_message": _handle_send_message,
@@ -165,6 +174,7 @@ def _fail(session: Session, job: Job, error: str, attempts: int) -> None:
             conv = session.get(Conversation, uuid.UUID(conv_id))
             if conv is not None and conv.status != "closed":
                 conv.status = "waiting_human"
+                needs_a_person(session, job.tenant_id, conv.id)
         session.add(
             AuditLog(
                 tenant_id=job.tenant_id,
@@ -226,6 +236,7 @@ def periodic(session: Session) -> None:
     ]
     enqueue_rollups(session, ids)
     enqueue_usage_reports(session, now)
+    expire_stale_proposals(session, now)
 
 
 def tick(handlers: dict[str, Handler], worker_id: str) -> bool:

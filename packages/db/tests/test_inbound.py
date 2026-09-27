@@ -282,3 +282,32 @@ def test_cancel_by_text_with_nothing_booked_still_opts_out(hvac: Tenant, fake_sm
     with tenant_session(hvac.id) as s:
         r = ingest(s, hvac, _sms("CANCEL", f"SM-{uuid.uuid4().hex[:8]}", phone))
         assert r.opted_out
+
+
+def test_reply_c_confirms_the_next_appointment(hvac: Tenant, fake_sms: FakeSms) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from novaxis_core.models import Appointment
+
+    phone = f"+4477006{uuid.uuid4().int % 100000:05d}"
+    with tenant_session(hvac.id) as s:
+        first = ingest(s, hvac, _sms("boiler service please", f"SM-{uuid.uuid4().hex[:8]}", phone))
+        start = datetime.now(UTC) + timedelta(days=2)
+        a = Appointment(
+            tenant_id=hvac.id,
+            contact_id=first.contact_id,
+            conversation_id=first.conversation_id,
+            starts_at=start,
+            ends_at=start + timedelta(hours=1),
+            service_code="boiler_service",
+            status="confirmed",
+        )
+        s.add(a)
+        s.flush()
+        appt_id = a.id
+    with tenant_session(hvac.id) as s:
+        r = ingest(s, hvac, _sms("C", f"SM-{uuid.uuid4().hex[:8]}", phone))
+        job = s.get(Job, r.job_id)
+        assert job is not None and job.kind == "send_message", "a fixed thank-you, no model turn"
+        appt = s.get(Appointment, appt_id)
+        assert appt is not None and appt.customer_confirmed_at is not None

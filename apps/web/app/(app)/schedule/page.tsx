@@ -6,7 +6,7 @@ import { Badge, Card, ErrorLine } from "@/components/ui";
 import { when } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
-type Appt = { id: string; starts_at: string; ends_at: string; service_code: string; status: string; external_ref: string | null; contact: { display_name: string | null }; conversation_id: string | null };
+type Appt = { id: string; starts_at: string; ends_at: string; service_code: string; service_name: string; customer_confirmed_at: string | null; status: string; external_ref: string | null; contact: { display_name: string | null }; conversation_id: string | null };
 
 export default function SchedulePage() {
   const { data, error } = usePoll<{ items: Appt[] }>("/appointments?days=30", 10000);
@@ -25,7 +25,7 @@ export default function SchedulePage() {
           <ul className="divide-y divide-slate-100 text-sm">
             {items.map((a) => (
               <li key={a.id} data-testid="appointment" className="flex items-center justify-between py-2">
-                <span>{when(a.starts_at)} · {a.service_code} · {a.contact.display_name ?? "Unknown"}</span>
+                <span>{when(a.starts_at)} · {a.service_name} · {a.contact.display_name ?? "Unknown"}{a.customer_confirmed_at && <span className="ml-2 text-xs text-emerald-700">customer confirmed</span>}</span>
                 <span className="flex items-center gap-2">
                   {a.external_ref && <span className="text-xs text-slate-400">{a.external_ref.split(":")[0]}</span>}
                   <Badge tone={a.status === "confirmed" ? "green" : a.status === "held" ? "amber" : "slate"}>{a.status}</Badge>

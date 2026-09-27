@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
 import { api, post, put } from "@/lib/api";
+import { when } from "@/lib/format";
 
 export type Ticket = { id: string; ref: string; action: "create" | "update" | "cancel"; starts_at: string; ends_at: string; summary: string; status: string; service_name: string; customer_name: string; customer_phone: string; created_at: string; entered_at: string | null };
 type Settings = { vendor_name: string; email_to: string | null; date_order: "dmy" | "mdy"; service_map: Record<string, string> };
@@ -102,7 +103,7 @@ export function BookingBridgeCard({ onChange }: { onChange?: () => void }) {
             Upload today&apos;s diary export (CSV)
             <input type="file" accept=".csv,text/csv" className="hidden" data-testid="bridge-upload" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </label>
-          {b.last_import_at && <span className="text-xs text-slate-500">Last import {new Date(b.last_import_at).toLocaleString("en-GB")}</span>}
+          {b.last_import_at && <span className="text-xs text-slate-500">Last import {when(b.last_import_at)}</span>}
           <button className="ml-auto text-xs text-red-600" onClick={() => api("/integrations/bridge", { method: "DELETE" }).then(load)}>Disconnect</button>
         </div>
       )}
@@ -144,7 +145,7 @@ export function HandoffsCard() {
               <span className="flex items-center gap-2">
                 <Badge tone={tone[t.action]}>{t.action === "create" ? "new" : t.action === "update" ? "moved" : "cancelled"}</Badge>
                 <code className="text-xs">{t.ref}</code>
-                <span>{new Date(t.starts_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                <span>{when(t.starts_at)}</span>
                 <span className="text-slate-600">{t.service_name} · {t.customer_name} {t.customer_phone}</span>
               </span>
               <span className="flex items-center gap-2">

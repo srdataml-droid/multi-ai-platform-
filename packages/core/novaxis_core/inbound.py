@@ -40,6 +40,8 @@ OPT_OUT_BY_CHANNEL: dict[str, frozenset[str]] = {
     "email": frozenset({"stop", "unsubscribe"}),
 }
 OPT_IN_WORDS = frozenset({"start", "unstop", "yes", "subscribe"})
+# Reminders say "Reply C to confirm". Recorded on the appointment; no model turn needed.
+CONFIRM_WORDS = frozenset({"c", "confirm", "confirmed"})
 OPT_OUT_CONFIRMATION = (
     "You have been unsubscribed and will receive no further messages from us. "
     "Reply START to opt back in."
@@ -192,6 +194,34 @@ def _send_now(
     return out
 
 
+def _record_attendance(
+    session: Session, tenant: Tenant, contact: Contact, conv: Conversation
+) -> uuid.UUID | None:
+    """ "C" to a reminder: mark the next confirmed appointment and say thanks. Returns the
+    send job, or None if there is nothing to confirm (then it is an ordinary message)."""
+    appt = session.scalar(
+        select(Appointment)
+        .where(
+            Appointment.contact_id == contact.id,
+            Appointment.status == "confirmed",
+            Appointment.starts_at > datetime.now(UTC),
+        )
+        .order_by(Appointment.starts_at)
+        .limit(1)
+    )
+    if appt is None:
+        return None
+    from novaxis_core.scheduling import _enqueue_send, fmt, location_for, tz_for
+
+    appt.customer_confirmed_at = datetime.now(UTC)
+    when = fmt(appt.starts_at, tz_for(tenant, location_for(session, tenant)))
+    job = _enqueue_send(
+        session, tenant, conv, f"Thanks, that's confirmed for {when}. See you then."
+    )
+    _audit(session, tenant.id, "appointment.customer_confirmed", appointment_id=appt.id)
+    return job.id
+
+
 def ingest(session: Session, tenant: Tenant, inbound: NormalisedInbound) -> IngestResult:
     existing = session.scalar(
         select(Message).where(
@@ -243,6 +273,10 @@ def ingest(session: Session, tenant: Tenant, inbound: NormalisedInbound) -> Inge
     conv = _open_conversation(session, tenant, contact, inbound.channel)
     msg = _store_inbound(session, tenant, conv, inbound)
     conv.updated_at = datetime.now(UTC)
+    if word in CONFIRM_WORDS:
+        confirmed = _record_attendance(session, tenant, contact, conv)
+        if confirmed is not None:
+            return IngestResult(contact.id, conv.id, msg.id, confirmed)
     if conv.status == "waiting_customer":
         conv.status = "open"
     job = Job(

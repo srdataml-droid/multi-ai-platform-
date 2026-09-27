@@ -44,6 +44,7 @@ PROPOSAL_STATES = (
     "rejected",
     "executed",
     "failed",
+    "expired",
 )
 APPROVAL_DECISIONS = ("approve", "reject", "edit")
 BRIDGE_ACTIONS = ("create", "update", "cancel")
@@ -283,6 +284,7 @@ class Appointment(Base):
         UUID(as_uuid=True), ForeignKey("action_proposals.id", ondelete="SET NULL")
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    customer_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
 
 
@@ -348,6 +350,24 @@ class UsageEvent(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class PushSubscription(Base):
+    """One browser or phone that asked for staff alerts (Web Push). Free, no provider
+    account: the only alert channel that works before email or SMS is connected."""
+
+    __tablename__ = "push_subscriptions"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant_fk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
+    auth: Mapped[str] = mapped_column(String(100), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at()
+
+
 class BridgeTicket(Base):
     """One booking change handed to a vendor tool that has no API (Chunk 11). The office
     enters it by hand and marks it entered; the reference ties the vendor's next diary
@@ -406,6 +426,7 @@ TENANT_TABLES: tuple[str, ...] = (
     "metrics_daily",
     "usage_events",
     "bridge_tickets",
+    "push_subscriptions",
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")

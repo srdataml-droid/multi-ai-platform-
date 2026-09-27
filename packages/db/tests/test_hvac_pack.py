@@ -140,7 +140,13 @@ def test_idle_workflow_steps_are_scheduled_and_superseded(hvac: Tenant) -> None:
         assert {j.payload["step_id"] for j in steps} == {"chase_24h", "chase_72h", "close_7d"}
         now = datetime.now(UTC)
         by = {j.payload["step_id"]: j.run_after for j in steps}
-        assert timedelta(hours=23) < by["chase_24h"] - now < timedelta(hours=25)
+        # 24 hours on, or the next 08:00 if that lands in quiet hours (at most 12 h later).
+        assert timedelta(hours=23) < by["chase_24h"] - now < timedelta(hours=25 + 12)
+        from zoneinfo import ZoneInfo
+
+        from novaxis_core.quiet_hours import is_quiet
+
+        assert not is_quiet(by["chase_24h"], ZoneInfo("Europe/London"))
         assert timedelta(days=6) < by["close_7d"] - now < timedelta(days=8)
     # Customer replies, worker replies again: old steps superseded, new ones queued.
     with tenant_session(hvac.id) as s:

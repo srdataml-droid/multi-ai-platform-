@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_core.alerts import alert_channels, alerts_off
 from novaxis_core.models import Tenant
 from novaxis_packs import get_pack
 
@@ -32,6 +33,8 @@ def me(principal: CurrentPrincipal, session: TenantDb) -> dict[str, object]:
             "status": tenant.status,
             "plan": tenant.plan,
             "onboarded": tenant.onboarded_at is not None,
+            "timezone": str(tenant.settings.get("timezone") or "Europe/London"),
+            "alerts_off": alerts_off(alert_channels(session, tenant)),
         },
     }
 

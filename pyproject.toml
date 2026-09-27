@@ -18,6 +18,7 @@ dependencies = [
   "cryptography>=43",
   "pyjwt>=2.9",
   "python-multipart>=0.0.9",
+  "pywebpush>=2.0",
 ]
 
 [tool.vercel]
@@ -59,3 +60,7 @@ mypy_path = "packages/core:packages/db"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["apps", "packages"]
+
+[[tool.mypy.overrides]]
+module = ["pywebpush", "py_vapid"]
+ignore_missing_imports = true

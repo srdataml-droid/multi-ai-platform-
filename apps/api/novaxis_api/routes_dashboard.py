@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_core.billing import trial_block_reason
 from novaxis_core.llm import build_llm
 from novaxis_core.models import (
     ActionProposal,
@@ -24,7 +25,7 @@ from novaxis_core.models import (
     Tenant,
 )
 from novaxis_core.sensitive import reveal
-from novaxis_core.turn import build_messages, tenant_facts
+from novaxis_core.turn import build_messages, record_usage, tenant_facts
 from novaxis_packs import get_pack
 
 router = APIRouter(tags=["dashboard"])
@@ -363,6 +364,12 @@ def suggest(
     _require_staff(principal)
     conv = _get_conv(session, conversation_id)
     tenant = _tenant(session)
+    blocked = trial_block_reason(session, tenant, datetime.now(UTC))
+    if blocked:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "the trial has ended; choose a plan to use the assistant",
+        )
     pack = get_pack(tenant.pack_id)
     history = list(
         session.scalars(
@@ -382,4 +389,5 @@ def suggest(
         tools=None,
         max_tokens=400,
     )
+    record_usage(session, tenant, conv.id, "suggest", result)
     return {"suggestion": result.text}

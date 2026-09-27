@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
-from novaxis_core.models import Appointment, Contact
+from novaxis_core.models import Appointment, Contact, Tenant
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -36,6 +36,11 @@ def list_appointments(
         if rows
         else {}
     )
+    tenant = session.scalar(select(Tenant))
+    names = {
+        sv.get("code"): sv.get("name")
+        for sv in ((tenant.settings.get("services") if tenant else None) or [])
+    }
     return {
         "items": [
             {
@@ -43,6 +48,10 @@ def list_appointments(
                 "starts_at": a.starts_at.isoformat(),
                 "ends_at": a.ends_at.isoformat(),
                 "service_code": a.service_code,
+                "service_name": names.get(a.service_code) or a.service_code.replace("_", " "),
+                "customer_confirmed_at": a.customer_confirmed_at.isoformat()
+                if a.customer_confirmed_at
+                else None,
                 "status": a.status,
                 "external_ref": a.external_ref,
                 "contact": {
