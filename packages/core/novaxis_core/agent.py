@@ -164,12 +164,17 @@ def _intake(pack: PackSpec, plain: dict[str, Any]) -> dict[str, Any]:
         k: ("(held by the business)" if k in pack.sensitive_keys else v) for k, v in plain.items()
     }
     if not pack.intake:
-        return {"answers": answers, "complete": True, "next_question": None}
+        return {"answers": answers, "complete": True, "next_question": None, "questions": []}
     st = intake_status(pack.intake, plain)
     nxt = st.next_question
     return {
         "answers": answers,
         "complete": st.complete,
+        # Every question, so an agent can pull several answers out of one message
+        # (examples/hermes_agent.py does, before it replies).
+        "questions": [
+            {"key": q.key, "ask": q.ask, "type": q.type, "choices": q.choices} for q in pack.intake
+        ],
         "next_question": {"key": nxt.key, "ask": nxt.ask, "type": nxt.type, "choices": nxt.choices}
         if nxt
         else None,
@@ -358,6 +363,7 @@ def agent_propose(
         )
     elif kind == "extract_fields" and p.state == "executed":
         _service_area(session, tenant, pack, conv, ctx)
+        _after_intake(session, tenant, pack, conv, ctx)
     if kind == "reply" and p.state == "executed" and conv.status == "open":
         conv.status = "waiting_customer"
     conv.updated_at = datetime.now(UTC)
@@ -434,6 +440,32 @@ def _service_area(
         ctx,
         "service area",
     )
+
+
+def _after_intake(
+    session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation, ctx: GateContext
+) -> None:
+    """As turn.py: once every answer is in, the booking request goes to staff even if the
+    agent's model never proposes it (open models rarely call tools)."""
+    from novaxis_core.intake import status as intake_status
+    from novaxis_core.sensitive import decrypt_fields
+    from novaxis_core.turn import _has_proposal, _service_code, propose
+
+    if not pack.intake or pack.after_intake.action != "propose_appointment":
+        return
+    if _has_proposal(session, conv, "propose_appointment") or _has_proposal(
+        session, conv, "hand_to_human"
+    ):
+        return
+    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    if not intake_status(pack.intake, plain).complete:
+        return
+    params = {
+        "service_code": _service_code(pack, plain),
+        "preferred_window": str(plain.get(pack.after_intake.window_from, "")),
+        "notes": "proposed by intake engine",
+    }
+    propose(session, tenant, conv, "propose_appointment", params, ctx, "intake complete")
 
 
 def proposal_view(p: ActionProposal) -> dict[str, Any]:

@@ -12,6 +12,10 @@ it decides back as *proposals*. The platform's gate decides what actually happen
     python examples/hermes_agent.py            # keeps polling every 10 seconds
     python examples/hermes_agent.py --once     # one pass, then exit
 
+    # On a server, as a service that restarts itself: deploy/aws/setup-agent.sh
+    # (docs/agent-on-aws.md). Ollama Cloud works too: HERMES_BASE_URL=https://ollama.com/v1,
+    # HERMES_API_KEY=<your key>, HERMES_MODEL=gpt-oss:120b.
+
     # Or be told instead of polling (Settings > Your own agent > Webhook):
     export NOVAXIS_WEBHOOK_SECRET=whsec_...                   # shown when you set the webhook
     python examples/hermes_agent.py --serve 8787               # expose it over https, e.g. a tunnel
@@ -52,12 +56,67 @@ def ask_model(
     return dict(r.json()["choices"][0]["message"])
 
 
+EXTRACT = (
+    "You read what a customer just said and pull out the facts it states. Reply with a "
+    "single JSON object and nothing else. Use only the keys listed. Leave a key out if the "
+    "customer did not state it; never guess. For a key with options, use exactly one of them."
+)
+
+
+def extract_answers(llm: httpx.Client, model: str, ctx: dict[str, Any]) -> dict[str, str]:
+    """The intake answers in the customer's last message, from one JSON call. Open models
+    rarely call tools, so without this the answers (and the booking) never get recorded.
+    The platform checks every value again; anything odd here is simply dropped."""
+    intake = ctx["intake"]
+    questions = {q["key"]: q for q in intake.get("questions", [])}
+    said = [m["text"] for m in ctx["messages"] if m["from"] == "customer"]
+    if intake["complete"] or not questions or not said:
+        return {}
+    keys = "\n".join(
+        f"- {k}: {q['ask']}" + (f" (one of: {', '.join(q['choices'])})" if q["choices"] else "")
+        for k, q in questions.items()
+    )
+    r = llm.post(
+        "/chat/completions",
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": f"{EXTRACT}\n\nKeys:\n{keys}"},
+                {"role": "user", "content": said[-1]},
+            ],
+            "max_tokens": 400,
+        },
+    )
+    r.raise_for_status()
+    text = r.json()["choices"][0]["message"].get("content") or ""
+    start, end = text.find("{"), text.rfind("}")
+    try:
+        data = json.loads(text[start : end + 1]) if start >= 0 else {}
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        k: str(v).strip()
+        for k, v in data.items()
+        if k in questions
+        and isinstance(v, (str, int, float))
+        and not isinstance(v, bool)
+        and str(v).strip()
+    }
+
+
 def system_prompt(instructions: str, ctx: dict[str, Any]) -> str:
     parts = [instructions, ctx["business"]]
     intake = ctx["intake"]
     if intake["answers"]:
         parts.append("What the customer has told us: " + json.dumps(intake["answers"]))
-    if intake.get("next_question"):
+    if intake.get("complete"):
+        parts.append(
+            "Every answer is in. Do not ask any of the questions again. Thank the customer, "
+            "say you have what you need and that the team will be in touch to confirm."
+        )
+    elif intake.get("next_question"):
         parts.append(f"Next thing to ask: {intake['next_question']['ask']}")
     if ctx["appointments"]:
         parts.append("Their bookings: " + json.dumps(ctx["appointments"]))
@@ -81,9 +140,24 @@ def handle(
     conversation_id: str,
 ) -> list[dict[str, Any]]:
     """Decide and propose for one conversation. Returns what the platform said to each."""
-    ctx = api.get(f"/agent/v1/conversations/{conversation_id}").raise_for_status().json()
+    path = f"/agent/v1/conversations/{conversation_id}"
+    ctx = api.get(path).raise_for_status().json()
     if not ctx["conversation"]["agent_may_act"]:
         return []
+    results = []
+    answers = extract_answers(llm, model, ctx)
+    if answers:
+        r = api.post(
+            f"{path}/proposals", json={"kind": "extract_fields", "params": {"fields": answers}}
+        )
+        results.append(
+            {"kind": "extract_fields", "status": r.status_code, **(r.json() if r.content else {})}
+        )
+        # The platform may have acted on them: booked the job, or handed an address
+        # outside the area to a person. Read again before replying.
+        ctx = api.get(path).raise_for_status().json()
+        if not ctx["conversation"]["agent_may_act"]:
+            return results
     msg = ask_model(llm, model, system_prompt(instructions, ctx), ctx, tools)
     proposals: list[tuple[str, dict[str, Any]]] = []
     for call in msg.get("tool_calls") or []:
@@ -98,7 +172,6 @@ def handle(
     text = (msg.get("content") or "").strip()
     if text and not any(kind == "reply" for kind, _ in proposals):
         proposals.append(("reply", {"text": text}))
-    results = []
     for kind, params in proposals:
         r = api.post(
             f"/agent/v1/conversations/{conversation_id}/proposals",
@@ -112,10 +185,16 @@ def run_once(api: httpx.Client, llm: httpx.Client, model: str) -> list[dict[str,
     setup = api.get("/agent/v1/tools").raise_for_status().json()
     done = []
     for item in api.get("/agent/v1/conversations").raise_for_status().json()["items"]:
-        for res in handle(
-            api, llm, model, setup["instructions"], setup["tools"], item["conversation_id"]
-        ):
-            print(f"{item['conversation_id']} {res['kind']}: {res.get('state', res.get('detail'))}")
+        cid = item["conversation_id"]
+        try:
+            results = handle(api, llm, model, setup["instructions"], setup["tools"], cid)
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            # One conversation failing (the model timed out, a bad reply) must not stop
+            # the others; it is tried again on the next pass while the customer waits.
+            print(f"{cid} failed: {exc!r}", flush=True)
+            continue
+        for res in results:
+            print(f"{cid} {res['kind']}: {res.get('state', res.get('detail'))}", flush=True)
             done.append(res)
     return done
 
@@ -140,8 +219,13 @@ def serve(port: int, secret: str, api: httpx.Client, llm: httpx.Client, model: s
     def work(event: dict[str, Any]) -> None:
         if event["event"] == "message.received":
             cid = event["data"]["conversation_id"]
-            for res in handle(api, llm, model, setup["instructions"], setup["tools"], cid):
-                print(f"{cid} {res['kind']}: {res.get('state', res.get('detail'))}")
+            try:
+                results = handle(api, llm, model, setup["instructions"], setup["tools"], cid)
+            except (httpx.HTTPError, KeyError, ValueError) as exc:
+                print(f"{cid} failed: {exc!r}", flush=True)
+                return
+            for res in results:
+                print(f"{cid} {res['kind']}: {res.get('state', res.get('detail'))}", flush=True)
         elif event["event"] == "proposal.decided":
             print(f"staff decided {event['data']['proposal_id']}: {event['data']['state']}")
 
@@ -188,11 +272,18 @@ def main() -> int:
             return 2
         serve(args.serve, secret, api, llm, model)
         return 0
+    every = int(os.environ.get("POLL_SECONDS", "10"))
+    print(f"Novaxis agent up: {api.base_url}, model {model}, checking every {every} s", flush=True)
     while True:
-        run_once(api, llm, model)
+        try:
+            run_once(api, llm, model)
+        except httpx.HTTPError as exc:  # Novaxis or the network down: wait, then go on
+            print(f"pass failed: {exc!r}", flush=True)
+            if args.once:
+                return 1
         if args.once:
             return 0
-        time.sleep(10)
+        time.sleep(every)
 
 
 if __name__ == "__main__":

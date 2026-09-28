@@ -296,10 +296,9 @@ def test_the_example_hermes_agent_works_against_the_real_api(client: TestClient)
         "propose_appointment": "awaiting",
         "reply": "executed",
     }, "the malformed tool call was dropped; the text became the reply"
-    assert any(
-        m["role"] == "system" and "Business name" in m["content"] for m in seen[0]["messages"]
-    )
-    assert [t["function"]["name"] for t in seen[0]["tools"]][0] == "reply"
+    turn = next(b for b in seen if "tools" in b)  # the extraction call comes first
+    assert any(m["role"] == "system" and "Business name" in m["content"] for m in turn["messages"])
+    assert [t["function"]["name"] for t in turn["tools"]][0] == "reply"
     with tenant_session(_tenant().id) as s:
         out = s.scalar(
             select(Message).where(
@@ -307,6 +306,62 @@ def test_the_example_hermes_agent_works_against_the_real_api(client: TestClient)
             )
         )
         assert out is not None and out.body.startswith("Hi, I'm the AI assistant")
+
+
+def test_the_example_agent_books_on_a_model_that_never_calls_tools(client: TestClient) -> None:
+    """Open models (gpt-oss on Ollama Cloud, live) answer in plain text and call no tools.
+    The example agent pulls the answers out with one JSON call and records them; once
+    intake is complete the platform proposes the booking itself, as for the built-in
+    assistant, and the agent's reply is told not to ask again."""
+    import importlib.util
+    from pathlib import Path
+
+    import httpx
+
+    path = Path(__file__).resolve().parents[3] / "examples" / "hermes_agent.py"
+    spec = importlib.util.spec_from_file_location("hermes_agent", path)
+    assert spec is not None and spec.loader is not None
+    example = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(example)
+
+    _external()
+    conv_id = _customer_writes(
+        "I'm Priya. Upstairs radiators cold for 3 days, boiler about 6 years old, no heating. "
+        "My mum is 82 and lives with us. SE1 7PB, 07700 900456. Thursday suits."
+    )
+    answers = {
+        "name": "Priya",
+        "problem_type": "no heating",
+        "symptom": "upstairs radiators cold for 3 days",
+        "equipment_age": "about 6 years",
+        "urgency": "yes",
+        "postcode": "SE1 7PB",
+        "phone": "07700 900456",
+        "preferred_window": "Thursday",
+    }
+    seen: list[dict[str, Any]] = []
+
+    def model(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        seen.append(body)
+        text = json.dumps(answers) if "tools" not in body else "Thanks Priya, that's everything."
+        return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
+
+    client.headers.update(_key(client))
+    llm = httpx.Client(base_url="http://model.test/v1", transport=httpx.MockTransport(model))
+    example.run_once(client, llm, "gpt-oss:120b")
+    with tenant_session(_tenant().id) as s:
+        kinds = {
+            p.kind: p.state
+            for p in s.scalars(
+                select(ActionProposal).where(ActionProposal.conversation_id == conv_id)
+            )
+        }
+    assert kinds.get("extract_fields") == "executed"
+    assert kinds.get("propose_appointment") == "awaiting", "the booking reaches staff"
+    assert kinds.get("reply") == "executed"
+    reply_call = next(b for b in seen if "tools" in b and "Priya" in json.dumps(b["messages"]))
+    assert "Do not ask any of the questions again" in reply_call["messages"][0]["content"]
 
 
 def test_the_platform_checks_the_built_in_assistant_gets_apply_to_an_agent_too(
