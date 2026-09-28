@@ -458,6 +458,23 @@ class StockCountRow(Base):
 
 # Tables that carry tenant_id and therefore get an RLS policy. The migration and
 # the RLS test both iterate this list, so a new table cannot be forgotten.
+class AgentKey(Base):
+    """A key for a business's own agent (docs/agent-api.md). Only the hash is stored."""
+
+    __tablename__ = "agent_keys"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant_fk()
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(20), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = _created_at()
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 TENANT_TABLES: tuple[str, ...] = (
     "locations",
     "users",
@@ -475,6 +492,7 @@ TENANT_TABLES: tuple[str, ...] = (
     "bridge_tickets",
     "push_subscriptions",
     "stock_counts",
+    "agent_keys",
 )
 
 APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")

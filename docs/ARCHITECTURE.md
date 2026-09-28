@@ -103,6 +103,7 @@ Design points:
 - **Tools are the contract.** The LLM can only propose actions that exist in the pack's tool list. Free-text "I'll book that for you" without a proposal is caught by a post-check that inserts a "verify claim" proposal at medium risk.
 - **Idempotency.** Every executor takes the `proposal_id` as its idempotency key. Re-running a job cannot double-book or double-send.
 - **Time budget.** A turn that exceeds 20 seconds sends "one moment" and continues; over 60 seconds it hands to a human.
+- **Your own agent instead.** A business can set `assistant: external`: the built-in model stays quiet and the business's own agent (e.g. Hermes) reads conversations and proposes through `/agent/v1`, into the same `propose()` and gate. The emergency pre-check still runs here first. See docs/agent-api.md.
 
 ## 6. Action model and the approval gate (Chunk 4)
 

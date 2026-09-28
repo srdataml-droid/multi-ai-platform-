@@ -10,6 +10,8 @@ from __future__ import annotations
 from fastapi import FastAPI, Request, Response
 from starlette.concurrency import run_in_threadpool
 
+from novaxis_api.routes_agent import keys_router as agent_keys_router
+from novaxis_api.routes_agent import router as agent_router
 from novaxis_api.routes_alerts import router as alerts_router
 from novaxis_api.routes_appointments import router as appointments_router
 from novaxis_api.routes_approvals import router as approvals_router
@@ -68,6 +70,8 @@ def create_app() -> FastAPI:
     app.include_router(operator_router)
     app.include_router(stock_router)
     app.include_router(voice_router)
+    app.include_router(agent_router)
+    app.include_router(agent_keys_router)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]

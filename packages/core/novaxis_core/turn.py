@@ -300,6 +300,12 @@ def run_turn(
         )
         return TurnResult(conv.id, None, skipped_reason=blocked_reason)
 
+    if tenant.settings.get("assistant") == "external" and not emergency:
+        # The business's own agent answers through the agent API (agent.py). Only the
+        # emergency pre-check above stays here: it needs no model, and it must never
+        # depend on someone else's agent being up.
+        return TurnResult(conv.id, None, skipped_reason="external_agent")
+
     if emergency:
         # Keyword pre-check: no model in the loop for the dangerous branch.
         reply_text = pack.emergency_reply

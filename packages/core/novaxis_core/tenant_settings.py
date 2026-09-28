@@ -8,7 +8,7 @@ customer conversation. Packs extend this with their own fields via `pack` (Chunk
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -78,6 +78,11 @@ class TenantSettings(BaseModel):
     privacy_url: str | None = Field(
         default=None,
         description="Your privacy notice. Linked in the assistant's first reply to each customer.",
+    )
+    assistant: Literal["built_in", "external"] = Field(
+        default="built_in",
+        description="Who answers customers: the built-in assistant, or the business's own agent "
+        "through the agent API (docs/agent-api.md). The emergency check runs either way.",
     )
     widget_origins: list[str] = Field(
         default_factory=list,
