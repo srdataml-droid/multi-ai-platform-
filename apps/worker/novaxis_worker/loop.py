@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
+from novaxis_core.agent_webhooks import AGENT_EVENT_JOB, deliver
 from novaxis_core.alerts import ALERT_JOB, alert_staff, needs_a_person
 from novaxis_core.approvals import expire_stale_proposals
 from novaxis_core.billing import (
@@ -159,6 +160,10 @@ def _handle_alert(session: Session, tenant: Tenant, job: Job) -> None:
     job.last_error = f"delivered {n}"
 
 
+def _handle_agent_event(session: Session, tenant: Tenant, job: Job) -> None:
+    job.last_error = deliver(session, tenant, job)
+
+
 def _handle_purge(session: Session, tenant: Tenant, job: Job) -> None:
     # Erasure needs the service role (messages are append-only for the app role); every
     # statement inside is filtered by this tenant.
@@ -174,6 +179,7 @@ def build_handlers(pack_for: Callable[[str], PackSpec], llm: LLMClient) -> dict[
         REPORT_USAGE_KIND: _handle_report_usage,
         BRIDGE_EMAIL_KIND: _handle_bridge_email,
         ALERT_JOB: _handle_alert,
+        AGENT_EVENT_JOB: _handle_agent_event,
         PURGE_KIND: _handle_purge,
         "fetch_media": _handle_fetch_media,
         "worker_turn": _handle_worker_turn(pack_for, llm),

@@ -68,6 +68,42 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'content-type: application/js
   https://novaxis-api.vercel.app/agent/v1/conversations/$CONV/proposals
 ```
 
+## Push instead of polling (webhooks)
+
+Give a key a webhook (**Settings → Your own agent → Webhook → Save**) and Novaxis tells
+your agent the moment something needs it, instead of your agent asking every few seconds.
+Saving shows a **signing secret** (`whsec_...`) once; saving again makes a new one.
+**Send test** pushes a `ping` and shows whether your agent answered.
+
+| Event | When | `data` |
+|---|---|---|
+| `message.received` | A customer wrote and it is your agent's to answer (after the emergency check; emergencies are handled by the platform and not pushed) | `conversation_id`, `channel` |
+| `proposal.decided` | Staff approved, edited or rejected something your agent proposed | `proposal_id`, `kind`, `state`, `about_conversation`, `replaced_by` if edited |
+| `ping` | The Send test button | `key` |
+
+```
+POST <your webhook>
+Content-Type: application/json
+X-Novaxis-Signature: t=1790553600,v1=5f2c...          HMAC-SHA256("<t>.<body>", your secret)
+
+{"created_at":"...","data":{"channel":"whatsapp","conversation_id":"..."},"event":"message.received","id":"<event id>"}
+```
+
+- **Check every push**: recompute the HMAC and reject a mismatch or a `t` older than five
+  minutes (the example agent's `verify()` does exactly this, and is tested against the
+  platform's signing). Use `id` to ignore a push you already handled.
+- **Answer fast** (any 2xx within 5 seconds), then do the work: read the conversation with
+  your key and propose, as with polling.
+- **No customer data in pushes**: ids only. A leaked or mistyped webhook address leaks no
+  names or messages.
+- **Retries and the safety net**: a failed push is retried with backoff (3 attempts). If a
+  `message.received` still cannot be delivered, that conversation goes to a person and
+  staff are alerted: a customer is never left waiting on an agent that is down. Polling
+  keeps working alongside.
+- **Addresses**: public `https://` only; private, internal and cloud-metadata addresses
+  are refused when set and again after DNS when sent (plain `http://localhost` is allowed
+  in local development only).
+
 ## The example agent (Hermes over Ollama)
 
 `examples/hermes_agent.py` is about 100 lines: poll, read, ask the model with the tools,
@@ -81,7 +117,9 @@ python examples/hermes_agent.py --once
 ```
 
 It is tested against the real API with the model's answer scripted
-(`test_the_example_hermes_agent_works_against_the_real_api`). It drops malformed tool
+(`test_the_example_hermes_agent_works_against_the_real_api`). With `--serve 8787` and
+`NOVAXIS_WEBHOOK_SECRET` it receives pushes instead of polling (put it behind an https
+tunnel or host; it answers the push at once and thinks in the background). It drops malformed tool
 calls rather than guessing at them, and treats the model's plain text as the reply.
 
 For the **Hermes agent framework** (Nous Research) or any other framework: give it the
@@ -90,11 +128,12 @@ five calls above as tools, or wrap them as an MCP server if your framework prefe
 
 ## Limits (honest)
 
-- **Polling, not push.** The agent asks every few seconds; there are no webhooks yet.
-  Fine for text channels; the customer waits for your polling interval plus the model.
-- **Phone calls** need a reply within seconds. With your own agent the caller hears "one
-  moment" and, if the agent is slower than about 40 seconds, the call goes to a person
-  (docs/voice.md). Voice with an external agent needs push, not yet built.
+- **Speed is your agent's.** With a webhook the push leaves as soon as the message is
+  in; the customer then waits for your agent and its model. Without a webhook, add your
+  polling interval.
+- **Phone calls** need a reply within seconds: use a webhook and a fast model. The caller
+  hears "one moment" while your agent works and, past about 40 seconds, the call goes to a
+  person (docs/voice.md). Not yet tested with a real agent on a real call.
 - **Your agent's uptime is yours.** If it is down, customers wait (the emergency check
   still answers emergencies). Staff see waiting conversations in the inbox as usual.
 

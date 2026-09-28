@@ -473,6 +473,9 @@ class AgentKey(Base):
     created_at: Mapped[datetime] = _created_at()
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Push events to the agent (agent_webhooks.py). The secret is encrypted at rest.
+    webhook_url: Mapped[str | None] = mapped_column(String(500))
+    webhook_secret: Mapped[str | None] = mapped_column(Text)
 
 
 TENANT_TABLES: tuple[str, ...] = (

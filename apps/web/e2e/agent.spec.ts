@@ -23,4 +23,12 @@ test("the owner creates an agent key that opens the agent API", async ({ page, r
   expect((await r.json()).tools[0].function.name).toBe("reply");
   await page.getByRole("button", { name: "I have copied it" }).click();
   await expect(shown).toBeHidden();
+
+  // Push instead of polling: set a webhook, get its signing secret once, send a test.
+  const hook = page.locator("[data-testid^=webhook-]").first();
+  await hook.fill("http://127.0.0.1:9/novaxis"); // nothing listens there
+  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  await expect(page.getByTestId("webhook-secret")).toContainText("whsec_");
+  await page.getByRole("button", { name: "Send test" }).first().click();
+  await expect(page.getByText(/not reached/).first()).toBeVisible();
 });

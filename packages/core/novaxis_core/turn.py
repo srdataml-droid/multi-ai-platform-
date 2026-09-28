@@ -304,6 +304,15 @@ def run_turn(
         # The business's own agent answers through the agent API (agent.py). Only the
         # emergency pre-check above stays here: it needs no model, and it must never
         # depend on someone else's agent being up.
+        from novaxis_core.agent_webhooks import enqueue
+
+        enqueue(
+            session,
+            tenant.id,
+            "message.received",
+            {"conversation_id": str(conv.id), "channel": conv.channel},
+            hand_over_if_undelivered=conv.id,
+        )
         return TurnResult(conv.id, None, skipped_reason="external_agent")
 
     if emergency:

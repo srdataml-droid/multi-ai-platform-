@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_core.agent_webhooks import enqueue as enqueue_agent_event
 from novaxis_core.approval_model import model_for, shadow_report
 from novaxis_core.executors import execute
 from novaxis_core.gate import GateContext, decide
@@ -155,6 +156,7 @@ def decide_one(
     if body.decision == "reject":
         p.state = "rejected"
         session.flush()
+        _tell_agent(session, p)
         return _serialise(p)
 
     if body.decision == "approve":
@@ -162,6 +164,7 @@ def decide_one(
         session.flush()
         execute(session, tenant, p)
         _after_failure(session, p)
+        _tell_agent(session, p)
         return _serialise(p)
 
     # edit
@@ -186,4 +189,22 @@ def decide_one(
         execute(session, tenant, new)
         _after_failure(session, new)
     session.flush()
+    _tell_agent(session, p, replaced_by=new)
     return {"replaced": _serialise(p), "proposal": _serialise(new)}
+
+
+def _tell_agent(
+    session: TenantDb, p: ActionProposal, replaced_by: ActionProposal | None = None
+) -> None:
+    """If the business's own agent proposed this, push the decision to it (ids only)."""
+    if not (p.reason or "").startswith("agent:"):
+        return
+    data: dict[str, Any] = {
+        "proposal_id": str(p.id),
+        "kind": p.kind,
+        "state": p.state,
+        "about_conversation": str(p.conversation_id) if p.conversation_id else None,
+    }
+    if replaced_by is not None:
+        data["replaced_by"] = {"proposal_id": str(replaced_by.id), "state": replaced_by.state}
+    enqueue_agent_event(session, p.tenant_id, "proposal.decided", data)

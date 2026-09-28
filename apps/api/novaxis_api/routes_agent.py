@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -34,6 +35,7 @@ from novaxis_core.agent import (
     proposal_view,
     waiting,
 )
+from novaxis_core.agent_webhooks import WebhookError, ping, set_webhook
 from novaxis_core.billing import trial_block_reason
 from novaxis_core.models import ActionProposal, AgentKey, AuditLog, Conversation, Tenant
 from novaxis_db.session import service_session, tenant_session
@@ -183,6 +185,7 @@ def _key_view(k: AgentKey) -> dict[str, Any]:
         "created_at": k.created_at.isoformat(),
         "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
         "revoked_at": k.revoked_at.isoformat() if k.revoked_at else None,
+        "webhook_url": k.webhook_url,
     }
 
 
@@ -236,3 +239,57 @@ def revoke_key(key_id: uuid.UUID, principal: CurrentPrincipal, session: TenantDb
         )
     session.flush()
     return _key_view(row)
+
+
+def _active_key(session: TenantDb, key_id: uuid.UUID) -> AgentKey:
+    row = session.get(AgentKey, key_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such key")
+    if row.revoked_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "this key is revoked")
+    return row
+
+
+class WebhookIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str | None = Field(default=None, max_length=500)
+
+
+@keys_router.put("/{key_id}/webhook")
+def put_webhook(
+    key_id: uuid.UUID, body: WebhookIn, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Set (or clear, with no url) where events are pushed. Setting it makes a new signing
+    secret, in this response only."""
+    _require_owner(principal)
+    row = _active_key(session, key_id)
+    try:
+        secret = set_webhook(row, body.url)
+    except WebhookError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    session.add(
+        AuditLog(
+            tenant_id=principal.tenant_id,
+            actor=f"user:{principal.user_id}",
+            event="agent_key.webhook_set" if secret else "agent_key.webhook_cleared",
+            subject_table="agent_keys",
+            subject_id=row.id,
+            diff={"url": row.webhook_url or ""},
+        )
+    )
+    session.flush()
+    return {**_key_view(row), **({"webhook_secret": secret} if secret else {})}
+
+
+@keys_router.post("/{key_id}/webhook/test")
+def send_test_event(
+    key_id: uuid.UUID, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Send a signed `ping` now and say what the agent answered."""
+    _require_owner(principal)
+    row = _active_key(session, key_id)
+    try:
+        code = ping(row)
+    except (WebhookError, httpx.HTTPError) as exc:
+        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"[:300]}
+    return {"ok": True, "status_code": code}

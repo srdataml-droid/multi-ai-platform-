@@ -12,16 +12,24 @@ it decides back as *proposals*. The platform's gate decides what actually happen
     python examples/hermes_agent.py            # keeps polling every 10 seconds
     python examples/hermes_agent.py --once     # one pass, then exit
 
+    # Or be told instead of polling (Settings > Your own agent > Webhook):
+    export NOVAXIS_WEBHOOK_SECRET=whsec_...                   # shown when you set the webhook
+    python examples/hermes_agent.py --serve 8787               # expose it over https, e.g. a tunnel
+
 Needs only `httpx`. docs/agent-api.md explains every call.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import httpx
@@ -112,9 +120,51 @@ def run_once(api: httpx.Client, llm: httpx.Client, model: str) -> list[dict[str,
     return done
 
 
+def verify(secret: str, header: str, body: bytes, max_age: int = 300) -> bool:
+    """Novaxis signs each push: `t=<unix time>,v1=<HMAC-SHA256 of "<t>.<body>">`."""
+    try:
+        fields = dict(part.split("=", 1) for part in header.split(","))
+        t = int(fields["t"])
+    except (ValueError, KeyError):
+        return False
+    if abs(time.time() - t) > max_age:
+        return False
+    mac = hmac.new(secret.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(mac, fields.get("v1", ""))
+
+
+def serve(port: int, secret: str, api: httpx.Client, llm: httpx.Client, model: str) -> None:
+    """Answer pushes. Acknowledge at once (Novaxis waits 5 seconds at most), then think."""
+    setup = api.get("/agent/v1/tools").raise_for_status().json()
+
+    def work(event: dict[str, Any]) -> None:
+        if event["event"] == "message.received":
+            cid = event["data"]["conversation_id"]
+            for res in handle(api, llm, model, setup["instructions"], setup["tools"], cid):
+                print(f"{cid} {res['kind']}: {res.get('state', res.get('detail'))}")
+        elif event["event"] == "proposal.decided":
+            print(f"staff decided {event['data']['proposal_id']}: {event['data']['state']}")
+
+    class Hook(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802 - the http.server name
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            if not verify(secret, self.headers.get("X-Novaxis-Signature", ""), body):
+                self.send_response(401)
+                self.end_headers()
+                return
+            self.send_response(204)
+            self.end_headers()
+            threading.Thread(target=work, args=(json.loads(body),), daemon=True).start()
+
+    run_once(api, llm, model)  # anything that arrived while this agent was down
+    print(f"listening for Novaxis pushes on port {port}")
+    ThreadingHTTPServer(("0.0.0.0", port), Hook).serve_forever()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--serve", type=int, metavar="PORT", help="receive pushes instead of polling")
     args = ap.parse_args()
     key = os.environ.get("NOVAXIS_AGENT_KEY")
     if not key:
@@ -131,6 +181,13 @@ def main() -> int:
         timeout=120,
     )
     model = os.environ.get("HERMES_MODEL", "hermes3")
+    if args.serve:
+        secret = os.environ.get("NOVAXIS_WEBHOOK_SECRET")
+        if not secret:
+            print("set NOVAXIS_WEBHOOK_SECRET (shown when you set the webhook)", file=sys.stderr)
+            return 2
+        serve(args.serve, secret, api, llm, model)
+        return 0
     while True:
         run_once(api, llm, model)
         if args.once:
