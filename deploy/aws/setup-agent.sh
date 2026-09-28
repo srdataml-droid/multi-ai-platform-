@@ -11,9 +11,12 @@
 # /etc/novaxis-agent.env, which only root can read.
 set -euo pipefail
 
-REPO=https://raw.githubusercontent.com/srdataml-droid/multi-ai-platform-/main
-# The agent file this script installs. apps/api/tests/test_deploy_agent.py fails when it
-# changes and this hash does not, so the two cannot drift apart.
+REPO=https://raw.githubusercontent.com/srdataml-droid/multi-ai-platform-
+# The agent file this script installs: fetched from a fixed commit (GitHub serves `main`
+# from a cache for up to five minutes after a push) and checked against its hash.
+# apps/api/tests/test_deploy_agent.py fails when the agent changes and the hash does not;
+# after changing it, push, then set both lines to the new commit and hash.
+AGENT_COMMIT=a32282ad5ff34b794e4d254e7ac99b535f09a7f3
 AGENT_SHA256=caca1512286dc8265299fc6a428ad6d47998aa6dae61af1422ccc6c7b7c53a87
 DIR=/opt/novaxis-agent
 ENV_FILE=/etc/novaxis-agent.env
@@ -37,7 +40,7 @@ fi
 echo "2/5 Downloading the agent"
 id novaxis-agent >/dev/null 2>&1 || useradd --system --home-dir "$DIR" --shell /sbin/nologin novaxis-agent
 mkdir -p "$DIR"
-if ! curl -fsSL "$REPO/examples/hermes_agent.py" -o "$DIR/hermes_agent.py.new"; then
+if ! curl -fsSL "$REPO/$AGENT_COMMIT/examples/hermes_agent.py" -o "$DIR/hermes_agent.py.new"; then
   echo "Could not download the agent. If the repo is private now, see docs/agent-on-aws.md." >&2
   exit 1
 fi
