@@ -72,7 +72,8 @@ class Settings(BaseSettings):
     hold_minutes: int = 10
     slots_offered: int = 3
     availability_days: int = 14
-    # Media storage. "local" writes under storage_local_dir; "supabase" uses Storage REST.
+    # Media storage. "local" writes under storage_local_dir; "db" keeps files in Postgres
+    # (lasting, no extra keys); "supabase" uses Storage REST.
     storage_backend: str = "local"
     storage_local_dir: str = ".novaxis-media"
     storage_bucket: str = "media"

@@ -34,9 +34,10 @@ short-lived functions.
    provider webhooks and the web app's server-side calls; it has its own sign-in.
 
 ## Known limits of this hosting
-- Media is written to `/tmp`, which does not survive between function instances. Photos
-  work within a request but are not durable. Switch `NOVAXIS_STORAGE_BACKEND=supabase`
-  with a service key before any real tenant sends photos.
+- Media: `/tmp` does not survive between function instances, so production uses
+  `NOVAXIS_STORAGE_BACKEND=db` (photos and voice notes in the `media_objects` table,
+  migration 0021, no extra keys). Move to `supabase` Storage with a service key when
+  that table passes a few GB.
 - Replies come from the scripted fake model until `ANTHROPIC_API_KEY` is set and
   `NOVAXIS_LLM_PROVIDER=anthropic`.
 - A job that needs longer than the function limit fails and backs off like any other failure.

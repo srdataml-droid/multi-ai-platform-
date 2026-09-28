@@ -1,7 +1,8 @@
 """Object storage for customer media, under the tenant's prefix.
 
-One small interface, two implementations: local disk for development and tests,
-Supabase Storage for production. Keys are `<tenant_id>/<message_id>/<n>.<ext>`
+One small interface, three implementations: local disk for development and tests,
+Postgres (`db`: survives restarts on hosts with no lasting disk, such as Vercel, and
+needs no extra keys) and Supabase Storage. Keys are `<tenant_id>/<message_id>/<n>.<ext>`
 so a tenant's files can be listed, exported or purged by prefix.
 
 Access: files are never public. The local store is served by the API to
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Protocol
 
 import httpx
+from sqlalchemy import Engine, text
 
 from novaxis_core.settings import get_settings
 
@@ -162,6 +164,44 @@ class SupabaseBlobStore:
             r.raise_for_status()
 
 
+class DbBlobStore:
+    """Files in the `media_objects` table (migration 0021). Served by the API like the
+    local store. Fine for a pilot's photos and voice notes (10 MB cap each); move to
+    object storage when the table grows past a few GB."""
+
+    backend = "db"
+
+    def __init__(self, engine: Engine) -> None:
+        self.engine = engine
+
+    def put(self, key: str, data: bytes, content_type: str) -> StoredObject:
+        with self.engine.begin() as c:
+            c.execute(
+                text(
+                    "INSERT INTO media_objects (key, content_type, data) VALUES (:k, :ct, :d) "
+                    "ON CONFLICT (key) DO UPDATE SET content_type = :ct, data = :d"
+                ),
+                {"k": key, "ct": content_type, "d": data},
+            )
+        return StoredObject(key=key, content_type=content_type, size=len(data))
+
+    def get(self, key: str) -> tuple[bytes, str]:
+        with self.engine.connect() as c:
+            row = c.execute(
+                text("SELECT data, content_type FROM media_objects WHERE key = :k"), {"k": key}
+            ).first()
+        if row is None:
+            raise FileNotFoundError(key)
+        return bytes(row[0]), str(row[1])
+
+    def url_for(self, key: str, expires_seconds: int = 3600) -> str:
+        return f"/media/{key}"
+
+    def delete(self, key: str) -> None:
+        with self.engine.begin() as c:
+            c.execute(text("DELETE FROM media_objects WHERE key = :k"), {"k": key})
+
+
 @lru_cache(maxsize=1)
 def get_store() -> BlobStore:
     s = get_settings()
@@ -171,6 +211,10 @@ def get_store() -> BlobStore:
                 "supabase storage needs NOVAXIS_SUPABASE_URL and NOVAXIS_SUPABASE_SERVICE_KEY"
             )
         return SupabaseBlobStore(s.supabase_url, s.supabase_service_key, s.storage_bucket)
+    if s.storage_backend == "db":
+        from novaxis_db.session import get_engine  # core does not depend on db at import
+
+        return DbBlobStore(get_engine())
     return LocalBlobStore(Path(s.storage_local_dir))
 
 

@@ -1,4 +1,4 @@
-"""Serve stored media to staff. Only the local store needs this; Supabase hands
+"""Serve stored media to staff. The local and db stores need this; Supabase hands
 out signed URLs. The key starts with the tenant id, and the tenant-scoped
 session proves the caller belongs to that tenant."""
 

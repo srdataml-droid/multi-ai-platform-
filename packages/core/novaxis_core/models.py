@@ -502,4 +502,4 @@ APPEND_ONLY_TABLES: tuple[str, ...] = ("messages", "audit_log")
 
 # Tables the app role may not touch at all: RLS forced, no policy, no grant. Only the
 # service session (webhooks, operator tooling) reads and writes them.
-SERVICE_ONLY_TABLES: tuple[str, ...] = ("billing_events", "rate_limits")
+SERVICE_ONLY_TABLES: tuple[str, ...] = ("billing_events", "rate_limits", "media_objects")

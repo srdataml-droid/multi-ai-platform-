@@ -73,3 +73,20 @@ def test_supabase_store_calls_storage_api() -> None:
     url = store.url_for("t/m/0.png")
     assert url == "https://proj.supabase.co/storage/v1/object/sign/media/t/m/0.png?token=abc"
     assert json.loads(seen[2].content)["expiresIn"] == 3600
+
+
+def test_db_store_keeps_files_in_postgres(migrated: str) -> None:
+    from novaxis_core.storage import DbBlobStore
+    from novaxis_db.session import get_engine
+
+    store = DbBlobStore(get_engine(migrated))
+    key = f"{uuid.uuid4()}/{uuid.uuid4()}/0.ogg"
+    assert store.put(key, b"voice", "audio/ogg").size == 5
+    assert store.get(key) == (b"voice", "audio/ogg")
+    store.put(key, b"again", "audio/ogg")
+    assert store.get(key)[0] == b"again", "a retried upload replaces the file"
+    assert store.url_for(key) == f"/media/{key}"
+    store.delete(key)
+    store.delete(key)
+    with pytest.raises(FileNotFoundError):
+        store.get(key)
