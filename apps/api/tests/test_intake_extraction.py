@@ -14,7 +14,7 @@ from sqlalchemy import select
 from novaxis_core.channels import NormalisedInbound
 from novaxis_core.inbound import ingest
 from novaxis_core.intake import parse_extraction
-from novaxis_core.llm import FakeLLM
+from novaxis_core.llm import FakeLLM, ToolCall
 from novaxis_core.models import ActionProposal, Conversation, Tenant
 from novaxis_core.sensitive import decrypt_fields
 from novaxis_core.settings import get_settings
@@ -111,6 +111,33 @@ def test_a_model_that_never_calls_tools_still_completes_intake_and_proposes_the_
     assert kinds["propose_appointment"] == "awaiting", "the booking reaches staff"
     assert llm.calls[0]["task"] == "classify" and not llm.calls[0]["tools"]
     assert "Intake is complete." in llm.calls[1]["system_volatile"], "the reply knows"
+
+
+def test_a_recorded_answer_is_not_overwritten_by_one_the_engine_rejects(hvac: Tenant) -> None:
+    """Live on gpt-oss:120b: extraction recorded urgency "yes", then the reply model's own
+    extract_fields call wrote "high", intake became incomplete and nothing was booked."""
+    conv_id = _customer_says(hvac, "Everything at once, and my mum is 82 and lives with us.")
+    rewrite = {**EVERYTHING, "urgency": "high", "name": "Samuel"}
+    llm = FakeLLM(
+        script=[
+            (json.dumps({**EVERYTHING, "urgency": "yes"}), []),
+            ("Thanks, one moment.", [ToolCall("extract_fields", {"fields": rewrite}, "t1")]),
+        ]
+    )
+    with tenant_session(hvac.id) as s:
+        run_turn(s, hvac, HVAC, llm, conv_id)
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        got = decrypt_fields(conv.extracted, HVAC.sensitive_keys)
+        assert got["urgency"] == "yes", "the good answer stays"
+        assert got["name"] == "Samuel", "a valid correction is still taken"
+        booked = s.scalar(
+            select(ActionProposal).where(
+                ActionProposal.conversation_id == conv_id,
+                ActionProposal.kind == "propose_appointment",
+            )
+        )
+        assert booked is not None and booked.state == "awaiting"
 
 
 def test_a_bad_extraction_reply_records_nothing_and_the_turn_goes_on(hvac: Tenant) -> None:

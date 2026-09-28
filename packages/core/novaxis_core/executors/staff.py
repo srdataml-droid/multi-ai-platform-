@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from novaxis_core.alerts import alert_staff, needs_a_person
 from novaxis_core.channels import get_adapter
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
+from novaxis_core.intake import valid_answer
 from novaxis_core.models import ActionProposal, Conversation, Tenant
 from novaxis_core.pack_registry import resolve_pack
-from novaxis_core.sensitive import encrypt_fields
+from novaxis_core.sensitive import decrypt_fields, encrypt_fields
 
 
 @executor("extract_fields")
@@ -21,12 +22,30 @@ def extract_fields(
     conv = session.get(Conversation, conversation_id_of(proposal))
     if conv is None:
         return ExecResult(False, {}, "conversation not found")
-    sensitive = resolve_pack(tenant.pack_id).sensitive_keys
+    pack = resolve_pack(tenant.pack_id)
+    questions = {q.key: q for q in pack.intake}
+    current = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    fields: dict[str, str] = {}
+    kept: list[str] = []
+    for k, v in params.fields.items():
+        key, value = str(k), str(v)
+        q = questions.get(key)
+        # A good answer is never replaced by one the intake engine rejects: live, the
+        # model rewrote a recorded "yes" as "high", intake fell back to incomplete and
+        # the booking was never proposed.
+        if q and key in current and valid_answer(q, str(current[key])):
+            if not valid_answer(q, value):
+                kept.append(key)
+                continue
+        fields[key] = value
     merged = dict(conv.extracted)
-    merged.update(encrypt_fields({str(k): str(v) for k, v in params.fields.items()}, sensitive))
+    merged.update(encrypt_fields(fields, pack.sensitive_keys))
     conv.extracted = merged
     # Keys only: values may be sensitive and this result is audited.
-    return ExecResult(True, {"keys": ",".join(sorted(params.fields))})
+    result = {"keys": ",".join(sorted(fields))}
+    if kept:
+        result["kept"] = ",".join(sorted(kept))
+    return ExecResult(True, result)
 
 
 @executor("hand_to_human")
