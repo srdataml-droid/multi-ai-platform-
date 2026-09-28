@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_core.approval_model import model_for, shadow_report
 from novaxis_core.executors import execute
 from novaxis_core.gate import GateContext, decide
 from novaxis_core.models import ActionProposal, Approval, AuditLog, Contact, Conversation, Tenant
@@ -47,6 +48,7 @@ def _serialise(p: ActionProposal) -> dict[str, Any]:
         "error": p.error,
         "result": p.result,
         "superseded_by": str(p.superseded_by) if p.superseded_by else None,
+        "prediction": p.prediction,
         "created_at": p.created_at.isoformat(),
         "executed_at": p.executed_at.isoformat() if p.executed_at else None,
     }
@@ -62,6 +64,26 @@ def list_awaiting(principal: CurrentPrincipal, session: TenantDb) -> dict[str, A
         )
     )
     return {"items": [_serialise(p) for p in rows], "count": len(rows)}
+
+
+@router.get("/learning")
+def learning(principal: CurrentPrincipal, session: TenantDb) -> dict[str, Any]:
+    """What the approval model has learnt, and how its advice compares with the decisions
+    staff actually made (the shadow report). Nothing is ever approved by the model."""
+    tenant = session.scalar(select(Tenant))
+    m = model_for(tenant.slug) if tenant else None
+    return {
+        "model": None
+        if m is None
+        else {
+            "data": "synthetic" if m.synthetic else "real",
+            "trained_at": m.spec.get("trained_at"),
+            "rows": m.spec.get("rows"),
+            "metrics": m.spec.get("metrics"),
+            "precision_at": m.spec.get("precision_at"),
+        },
+        "shadow": shadow_report(session),
+    }
 
 
 @router.get("/{proposal_id}")

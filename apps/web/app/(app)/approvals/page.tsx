@@ -8,10 +8,60 @@ import { summarise } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
-type Proposal = { id: string; conversation_id: string | null; kind: string; params: Record<string, unknown>; risk: string; reason: string | null; created_at: string };
+type Prediction = { p: number; level: "likely" | "unsure" | "unlikely"; reasons: string[]; data: "real" | "synthetic" };
+type Proposal = { id: string; conversation_id: string | null; kind: string; params: Record<string, unknown>; risk: string; reason: string | null; created_at: string; prediction: Prediction | null };
+type Threshold = { threshold: number; would_auto_approve: number; of_which_staff_did_not_approve: number; precision: number | null; share_of_queue: number | null };
+type Learning = {
+  model: { data: string; trained_at: string; rows: number } | null;
+  shadow: { decided_with_prediction: number; staff_approved: number; agreement: number | null; thresholds: Threshold[] };
+};
+
+const pct = (x: number | null | undefined) => (x == null ? "-" : `${Math.round(x * 100)}%`);
+
+// The approval model's guess for one proposal. Advice only: staff still decide.
+function Guess({ g }: { g: Prediction }) {
+  const tone = g.level === "likely" ? "green" : g.level === "unlikely" ? "amber" : "slate";
+  const words = g.level === "likely" ? "usually approved as written" : g.level === "unlikely" ? "often changed or rejected" : "could go either way";
+  return (
+    <p className="mb-2 text-xs text-slate-600" data-testid="prediction">
+      <Badge tone={tone}>{pct(g.p)}</Badge> <span className="font-medium">Model&apos;s guess: {words}</span>
+      {g.reasons.length > 0 && <span className="text-slate-500"> · {g.reasons.join(" · ")}</span>}
+    </p>
+  );
+}
+
+// What the model would have done if it were allowed to approve, against what staff did.
+function LearningCard({ l }: { l: Learning }) {
+  if (!l.model) return null;
+  const s = l.shadow;
+  return (
+    <Card title="What the approval model has learnt">
+      <p className="mb-2 text-xs text-slate-500">
+        It learns from every Approve, Edit and Reject here. It never approves anything itself. Below: if it had been allowed to approve above a confidence level, how often would staff have agreed?
+        {l.model.data === "synthetic" && " Demo model trained on synthetic data."}
+      </p>
+      {s.decided_with_prediction === 0 ? (
+        <p className="text-sm text-slate-500">No decisions with a guess yet.</p>
+      ) : (
+        <>
+          <p className="mb-2 text-sm">{s.decided_with_prediction} decisions compared; the guess matched staff {pct(s.agreement)} of the time.</p>
+          <table className="w-full text-sm" data-testid="shadow-table">
+            <thead><tr className="text-left text-xs text-slate-500"><th>Confidence</th><th>Would approve</th><th>Staff disagreed</th><th>Right</th></tr></thead>
+            <tbody>
+              {s.thresholds.map((t) => (
+                <tr key={t.threshold}><td>{pct(t.threshold)}+</td><td>{t.would_auto_approve} ({pct(t.share_of_queue)})</td><td>{t.of_which_staff_did_not_approve}</td><td>{pct(t.precision)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </Card>
+  );
+}
 
 export default function ApprovalsPage() {
   const { data, error, refresh } = usePoll<{ items: Proposal[] }>("/approvals", 4000);
+  const { data: learning } = usePoll<Learning>("/approvals/learning", 60000);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -51,6 +101,7 @@ export default function ApprovalsPage() {
       {(data?.items ?? []).map((p) => (
         <Card key={p.id} title={p.kind.replace(/_/g, " ")} actions={<Badge tone={p.risk === "high" ? "red" : "amber"}>{p.risk}</Badge>}>
           <p className="mb-2 text-xs text-slate-500">{p.reason} · {ago(p.created_at)} · {p.conversation_id && <Link className="text-blue-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link>}</p>
+          {p.prediction && <Guess g={p.prediction} />}
           <dl className="mb-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm" data-testid={`summary-${p.id}`}>
             {summarise(p.params).map(([k, v]) => (
               <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words">{v}</dd></div>
@@ -67,6 +118,7 @@ export default function ApprovalsPage() {
           </div>
         </Card>
       ))}
+      {learning && <LearningCard l={learning} />}
     </div>
   );
 }

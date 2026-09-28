@@ -37,12 +37,16 @@ class NotEnoughDataError(ValueError):
     pass
 
 
-def fit_encoding(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def fit_encoding(
+    rows: list[dict[str, Any]],
+    numeric: tuple[str, ...] = NUMERIC,
+    categorical: tuple[str, ...] = CATEGORICAL,
+) -> dict[str, Any]:
     enc: dict[str, Any] = {"numeric": {}, "categorical": {}}
-    for name in NUMERIC:
+    for name in numeric:
         v = np.array([float(r[name]) for r in rows])
         enc["numeric"][name] = {"mean": float(v.mean()), "std": float(v.std()) or 1.0}
-    for name in CATEGORICAL:
+    for name in categorical:
         enc["categorical"][name] = sorted({str(r[name]) for r in rows})
     return enc
 
@@ -50,10 +54,10 @@ def fit_encoding(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def encode(rows: list[dict[str, Any]], enc: dict[str, Any]) -> np.ndarray:
     """Standardised numbers, then one column per category seen in training."""
     cols: list[np.ndarray] = []
-    for name in NUMERIC:
+    for name in enc["numeric"]:
         p = enc["numeric"][name]
         cols.append((np.array([float(r[name]) for r in rows]) - p["mean"]) / p["std"])
-    for name in CATEGORICAL:
+    for name in enc["categorical"]:
         for value in enc["categorical"][name]:
             cols.append(np.array([1.0 if str(r[name]) == value else 0.0 for r in rows]))
     return np.column_stack(cols)
@@ -67,11 +71,11 @@ def to_spec(lr: LogisticRegression, enc: dict[str, Any]) -> dict[str, Any]:
     w = lr.coef_[0]
     i = 0
     numeric: dict[str, Any] = {}
-    for name in NUMERIC:
+    for name in enc["numeric"]:
         numeric[name] = {**enc["numeric"][name], "weight": float(w[i])}
         i += 1
     categorical: dict[str, dict[str, float]] = {}
-    for name in CATEGORICAL:
+    for name in enc["categorical"]:
         categorical[name] = {}
         for value in enc["categorical"][name]:
             categorical[name][value] = float(w[i])

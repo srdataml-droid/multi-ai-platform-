@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install ml-train-synthetic ml-train ml-export
+.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install ml-train-synthetic ml-train ml-export ml-train-approvals-synthetic ml-train-approvals ml-export-approvals
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -64,3 +64,12 @@ ml-train:      ## No-show model on real recorded outcomes (reads the database)
 
 ml-export:     ## Training table as CSV for notebooks
 	uv run python -m novaxis_ml.no_show export --out ml-rows.csv
+
+ml-train-approvals-synthetic: ## Approval model on synthetic decisions (docs/ml.md section 8)
+	uv run python -m novaxis_ml.approvals train --source synthetic
+
+ml-train-approvals: ## Approval model on real staff decisions (reads the database)
+	uv run python -m novaxis_ml.approvals train --source db
+
+ml-export-approvals: ## Approval training table as CSV
+	uv run python -m novaxis_ml.approvals export --out approval-rows.csv

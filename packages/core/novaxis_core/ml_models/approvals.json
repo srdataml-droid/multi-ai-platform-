@@ -1,0 +1,117 @@
+{
+  "categorical": {
+    "channel": {
+      "email": -0.08207597741785559,
+      "twilio_sms": 0.1035653709698024,
+      "webchat": 0.019500783484423006,
+      "whatsapp": 0.016120238312924567
+    },
+    "gate_reason": {
+      "default": 0.16553109911899233,
+      "pack_rule": 0.23536611106249475,
+      "tenant_override": -0.34378679483219254
+    },
+    "kind": {
+      "cancel_appointment": -0.6036474009174446,
+      "confirm_appointment": 0.986774771798842,
+      "propose_appointment": 0.4634390217281358,
+      "quote_price": -1.0728513039745584,
+      "reply": 0.39334046720127214,
+      "reschedule_appointment": -0.10994514048695284
+    },
+    "origin": {
+      "intake": -0.07912769360587746,
+      "model": 0.13664805092416038,
+      "workflow": -0.00040994196898915794
+    },
+    "pack_id": {
+      "dental": 0.0508233231080937,
+      "hvac": -0.07294340077296273,
+      "restoration": 0.07923049301416331
+    },
+    "weekday": {
+      "fri": 0.0681039547996711,
+      "mon": -0.1270000225329637,
+      "sat": 0.1679603281749458,
+      "sun": -0.10652889652604498,
+      "thu": -0.03439196005150106,
+      "tue": -0.03834505057387167,
+      "wed": 0.12731206205905876
+    }
+  },
+  "data": "synthetic",
+  "intercept": 0.06056895121320113,
+  "kind": "logistic_regression",
+  "metrics": {
+    "auc": 0.7839,
+    "brier": 0.1884
+  },
+  "numeric": {
+    "conv_messages": {
+      "mean": 15.057666666666666,
+      "std": 8.326844613791122,
+      "weight": -0.0012150892048838071
+    },
+    "customer_messages": {
+      "mean": 6.048666666666667,
+      "std": 3.1816607124093053,
+      "weight": -0.023009187984847426
+    },
+    "has_money": {
+      "mean": 0.20433333333333334,
+      "std": 0.4032136185971677,
+      "weight": -0.31395720309812164
+    },
+    "has_time": {
+      "mean": 0.0,
+      "std": 1.0,
+      "weight": 0.0
+    },
+    "hour": {
+      "mean": 11.605,
+      "std": 6.967087507225191,
+      "weight": 0.02920393586618584
+    },
+    "prior_decisions": {
+      "mean": 10.053,
+      "std": 13.25192530666142,
+      "weight": 0.06360375203794974
+    },
+    "prior_rate": {
+      "mean": 0.4392062333333333,
+      "std": 0.1964343691019443,
+      "weight": 0.5475344432675323
+    },
+    "text_len": {
+      "mean": 2.043553333333333,
+      "std": 1.0534694618998481,
+      "weight": -0.2845082416815563
+    }
+  },
+  "precision_at": [
+    {
+      "precision": 0.8793,
+      "share_of_queue": 0.1933,
+      "threshold": 0.8,
+      "would_auto_approve": 116
+    },
+    {
+      "precision": 0.8649,
+      "share_of_queue": 0.0617,
+      "threshold": 0.9,
+      "would_auto_approve": 37
+    },
+    {
+      "precision": 1.0,
+      "share_of_queue": 0.005,
+      "threshold": 0.95,
+      "would_auto_approve": 3
+    }
+  ],
+  "rows": 3000,
+  "thresholds": {
+    "likely": 0.8,
+    "unlikely": 0.5
+  },
+  "trained_at": "2026-09-27T23:54:58+00:00"
+}

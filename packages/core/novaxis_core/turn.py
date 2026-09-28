@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
+from novaxis_core.approval_model import record_prediction
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.intake import out_of_area, prompt_block
@@ -201,6 +202,7 @@ def propose(
     if d.state == "auto_approved":
         execute(session, tenant, p)
     elif d.state == "awaiting":
+        record_prediction(session, tenant, p)
         enqueue_staff_notification(session, tenant, p.id)
     else:
         _audit(

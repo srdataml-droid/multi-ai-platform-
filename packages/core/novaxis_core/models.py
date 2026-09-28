@@ -246,6 +246,8 @@ class ActionProposal(Base):
     superseded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("action_proposals.id", ondelete="SET NULL")
     )
+    # The approval model's prediction when the proposal started waiting (approval_model.py).
+    prediction: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _created_at()
 
 

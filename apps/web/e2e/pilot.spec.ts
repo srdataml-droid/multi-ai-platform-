@@ -45,8 +45,13 @@ test("staff approves a proposal and sees the offered slots in the schedule", asy
   await page.waitForURL("**/approvals");
   const card = page.locator("section", { hasText: marker }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
+  // The approval model's guess (advice only) is shown on the card; the demo business uses
+  // the synthetic model, and says so.
+  await expect(card.getByTestId("prediction")).toContainText("Model's guess");
+  await expect(card.getByTestId("prediction")).toContainText("synthetic");
   await card.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(card).toBeHidden({ timeout: 15_000 });
+  await expect(page.getByText("What the approval model has learnt")).toBeVisible();
 
   workerOnce(marker); // sends the offer message
   await page.getByRole("link", { name: "Schedule" }).click();

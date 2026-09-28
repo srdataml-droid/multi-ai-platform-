@@ -88,6 +88,7 @@ like every other action.
 | Job duration (trades) | Actual start/finish per job | Needs actual times from the booking software |
 | Enquiry value / urgency | Booked? value? per conversation | Needs a value field on bookings |
 | Stock counting from photos | Photos with the true count | **Built** (section 7) |
+| Will staff approve this? | Every Approve / Edit / Reject | **Built** (section 8) |
 
 ## 7. Stock counting from a photo (neural network)
 
@@ -157,3 +158,65 @@ To try the synthetic pipeline yourself:
 
 **Not yet built:** one model per product, reading prices or labels, stock levels over time
 and reorder alerts. The confirmed counts table (`stock_counts`) is the base for all of them.
+
+## 8. Approval learning: will staff approve this as written?
+
+Every decision in the approval queue is a free label: **Approve = 1, Edit or Reject = 0**
+(an edit means the proposal was not right as it stood). The model learns which proposals
+a business's staff accept, so they can see it at a glance, and so that one day a
+business could choose to let the safest ones through on their own. **Today it is advice
+only: the model approves nothing.**
+
+Code: inputs `packages/core/novaxis_core/approval_features.py` (shared by training and
+scoring), live scoring and the shadow report `approval_model.py`, training
+`packages/ml/novaxis_ml/approvals.py`.
+
+**Inputs (no personal data, no message text):** the kind of action, why the gate held it
+(default, the trade's rule, the business's own rule), who proposed it (the model, intake,
+a follow-up), the channel and trade, the text's length and whether it mentions money or
+a day or time, when it was proposed, the conversation's length, and this business's past
+approval rate for this kind. The rate counts only decisions made **before** the proposal
+existed (tested), and starts at 50% with no history.
+
+**When it runs:** when a proposal starts waiting, its guess is stored on it
+(`action_proposals.prediction`, migration 0017) and shown on the Approvals page with its
+reasons ("+ this business approved 90% of these before", "- mentions money"). If the model
+fails, the proposal still reaches staff (tested).
+
+**Shadow report** (Approvals page, "What the approval model has learnt";
+`GET /approvals/learning`): of the proposals staff decided that had a guess, how often
+the guess matched, and for confidence 80/90/95%: how many it would have approved and how
+many of those staff did not approve. Guesses are stored before the decision, so this is
+an honest test, not hindsight.
+
+**Evaluation when training** (most recent 20% of decisions held out): AUC and Brier score,
+gradient boosting as a challenger, **"history only"** (the business's own approval rate)
+as the baseline to beat, and **precision at 80/90/95%**. If the model cannot beat history
+only, the report says "do not rely on it".
+
+Synthetic run (3,000 decisions with planted effects, `make ml-train-approvals-synthetic`):
+
+| | AUC |
+|---|---|
+| Logistic regression (shipped) | 0.784 |
+| Gradient boosting (challenger) | 0.758 |
+| History only (baseline) | 0.722 |
+
+At 90% confidence it would have approved 6% of the queue and been right **86%** of the
+time: nowhere near good enough to approve anything. That is the point of the report.
+
+**Before anyone lets it approve anything** (a founder decision, not a setting):
+1. trained on at least a few hundred real decisions for that business;
+2. the shadow report on *new* decisions (not training data) shows at least 99% right at the
+   chosen confidence, over at least 100 proposals;
+3. only for kinds whose floor is already low (never cancellations, reschedules, prices,
+   payments, or anything the core rules raise), owner opt-in per kind, every automatic
+   approval logged and reversible, and switched off the moment the shadow report dips.
+
+Commands:
+- `make ml-train-approvals-synthetic`: prove the pipeline.
+- `make ml-train-approvals`: train on real decisions (needs 200 decisions, 20 of each
+  outcome). A model trained on `real` data serves every business; a synthetic one only
+  demo-* businesses.
+- `make ml-export-approvals`: the training table as CSV.
+
