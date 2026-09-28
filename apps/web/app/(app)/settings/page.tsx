@@ -114,6 +114,11 @@ export default function SettingsPage() {
           Answer phone calls to your SMS number with the assistant
         </label>
         <p className="mt-1 text-xs text-slate-500">Callers talk, the assistant answers out loud, and emergencies are put through to your on-call number. Needs a Twilio number (see docs/voice.md). Press Save all at the top.</p>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input data-testid="twilio-whatsapp" type="checkbox" checked={Boolean(st.channels.twilio_whatsapp?.enabled)} onChange={(e) => update({ channels: { ...st.channels, twilio_whatsapp: { enabled: e.target.checked, config: st.channels.twilio_whatsapp?.config ?? {} } } })} />
+          Answer WhatsApp messages with the assistant (through Twilio)
+        </label>
+        <p className="mt-1 text-xs text-slate-500">Uses your Twilio number once Twilio has approved it for WhatsApp, or a WhatsApp test number Novaxis sets for you. No Meta setup needed (see docs/whatsapp.md). Press Save all at the top.</p>
       </Card>
       <Card title="Calendar and integrations" actions={<Button tone="secondary" onClick={connectGoogle}>Connect Google Calendar</Button>}>
         <p className="text-sm">System of record: <strong>{integ?.system_of_record ?? "…"}</strong></p>

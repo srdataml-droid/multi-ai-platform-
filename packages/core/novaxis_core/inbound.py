@@ -39,6 +39,7 @@ OPT_OUT_BY_CHANNEL: dict[str, frozenset[str]] = {
     "twilio_sms": OPT_OUT_WORDS,
     "email": frozenset({"stop", "unsubscribe"}),
     "whatsapp": frozenset({"stop", "unsubscribe"}),
+    "twilio_whatsapp": frozenset({"stop", "unsubscribe"}),
 }
 OPT_IN_WORDS = frozenset({"start", "unstop", "yes", "subscribe"})
 # Reminders say "Reply C to confirm". Recorded on the appointment; no model turn needed.

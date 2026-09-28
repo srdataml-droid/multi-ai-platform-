@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     model_summarise: str = "claude-haiku-4-5"
     llm_timeout_seconds: float = 45.0
     llm_max_retries: int = 2
+    # Before each reply, record intake answers with a small JSON call (turn.py), so intake
+    # and bookings work even with models that rarely call tools. On for open models.
+    intake_extraction: bool = False
     # Billing. With no Stripe keys the provider is "demo": checkout activates the tenant
     # through the same event handler a real webhook uses, and no money moves.
     stripe_secret_key: str = ""

@@ -9,6 +9,7 @@ the next turn asks again.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -95,3 +96,50 @@ def out_of_area(value: str | None, prefixes: list[str]) -> bool:
         return False
     v = value.replace(" ", "").upper()
     return not any(v.startswith(p.replace(" ", "").upper()) for p in prefixes)
+
+
+EXTRACTION_PROMPT = (
+    "You read what a customer just said and pull out the facts it states. Reply with a "
+    "single JSON object and nothing else. Use only the keys listed. Leave a key out if the "
+    "customer did not state it; never guess. For a key with a list of options, use exactly "
+    "one of the options, or leave it out."
+)
+
+
+def extraction_block(questions: list[IntakeQuestion]) -> str:
+    """The keys the extraction call may fill, in the pack's own words."""
+    kinds = {"yesno": " Answer yes or no.", "phone": " A phone number.", "postcode": " A postcode."}
+    lines = ["Keys:"]
+    for q in questions:
+        opts = f" One of: {', '.join(q.choices)}." if q.choices else ""
+        lines.append(f"- {q.key}: {q.ask}{opts}{kinds.get(q.type, '')}")
+    return "\n".join(lines)
+
+
+def parse_extraction(text: str, questions: list[IntakeQuestion]) -> dict[str, str]:
+    """The valid answers in a model's JSON reply. Anything else (prose, unknown keys,
+    answers the engine would reject) is dropped, so a bad reply records nothing."""
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    by_key = {q.key: q for q in questions}
+    out: dict[str, str] = {}
+    for k, v in data.items():
+        q = by_key.get(str(k))
+        if q is None or v is None or isinstance(v, bool | dict | list):
+            continue
+        value = str(v).strip()
+        if q.type == "choice":
+            value = next((c for c in q.choices if c.lower() == value.lower()), value)
+        if q.type == "yesno":
+            yes_no = {"y": "yes", "true": "yes", "n": "no", "false": "no"}
+            value = yes_no.get(value.lower(), value.lower())
+        if valid_answer(q, value):
+            out[q.key] = value
+    return out

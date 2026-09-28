@@ -110,6 +110,12 @@ class TenantSettings(BaseModel):
             if number is None:
                 raise ValueError("twilio_sms number must be a full number like +447700900123")
             sms.config["number"] = number
+        twa = v.get("twilio_whatsapp")
+        if twa and twa.config.get("number"):
+            number = routing_phone(str(twa.config["number"]).removeprefix("whatsapp:"))
+            if number is None:
+                raise ValueError("twilio_whatsapp number must be a full number like +14155238886")
+            twa.config["number"] = number
         email = v.get("email")
         if email and email.config.get("inbound_address"):
             address = normalize_email(str(email.config["inbound_address"]))

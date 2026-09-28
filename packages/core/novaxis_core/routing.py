@@ -18,15 +18,29 @@ from novaxis_core.models import Tenant
 log = logging.getLogger("novaxis.routing")
 
 # channel -> the key inside settings.channels[channel].config that identifies the tenant
-ROUTE_KEYS = {"twilio_sms": "number", "email": "inbound_address", "whatsapp": "phone_number_id"}
+ROUTE_KEYS = {
+    "twilio_sms": "number",
+    "email": "inbound_address",
+    "whatsapp": "phone_number_id",
+    "twilio_whatsapp": "number",
+}
 # Channels that share another channel's address: one Twilio number takes texts and calls.
 ROUTE_ALIASES = {"twilio_voice": "twilio_sms"}
+# Tried when a channel's own address matches nobody: WhatsApp through Twilio on a business
+# with no separate WhatsApp number goes by its Twilio SMS number.
+ROUTE_FALLBACKS = {"twilio_whatsapp": "twilio_sms"}
 
 
 def resolve_tenant(session: Session, channel: str, tenant_ref: str) -> Tenant | None:
     if channel == "webchat":
         return session.scalar(select(Tenant).where(Tenant.slug == tenant_ref))
-    channel = ROUTE_ALIASES.get(channel, channel)
+    found = _by_address(session, ROUTE_ALIASES.get(channel, channel), tenant_ref)
+    if found is None and channel in ROUTE_FALLBACKS:
+        found = _by_address(session, ROUTE_FALLBACKS[channel], tenant_ref)
+    return found
+
+
+def _by_address(session: Session, channel: str, tenant_ref: str) -> Tenant | None:
     key = ROUTE_KEYS.get(channel)
     if key is None:
         return None
@@ -75,6 +89,6 @@ def claim_error(exc: IntegrityError) -> str | None:
         return "That SMS number is already connected to another business."
     if "uq_tenants_inbound_email" in text:
         return "That inbound email address is already used by another business."
-    if "uq_tenants_whatsapp_number" in text:
+    if "uq_tenants_whatsapp_number" in text or "uq_tenants_twilio_whatsapp_number" in text:
         return "That WhatsApp number is already connected to another business."
     return None

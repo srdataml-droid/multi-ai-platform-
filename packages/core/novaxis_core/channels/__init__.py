@@ -14,6 +14,7 @@ from novaxis_core.channels.base import (
 from novaxis_core.channels.email_postmark import PostmarkEmailAdapter
 from novaxis_core.channels.twilio_sms import TwilioSmsAdapter
 from novaxis_core.channels.twilio_voice import TwilioVoiceAdapter
+from novaxis_core.channels.twilio_whatsapp import TwilioWhatsAppAdapter
 from novaxis_core.channels.webchat import WebchatAdapter
 from novaxis_core.channels.whatsapp import WhatsAppAdapter
 
@@ -21,6 +22,7 @@ _ADAPTERS: dict[str, ChannelAdapter] = {
     "webchat": WebchatAdapter(),
     "twilio_sms": TwilioSmsAdapter(),
     "twilio_voice": TwilioVoiceAdapter(),
+    "twilio_whatsapp": TwilioWhatsAppAdapter(),
     "email": PostmarkEmailAdapter(),
     "whatsapp": WhatsAppAdapter(),
 }

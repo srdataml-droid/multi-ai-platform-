@@ -28,7 +28,7 @@ class ReplyWindowClosedError(PermissionError):
 
 
 def destination_for(contact: Contact, channel: str) -> str:
-    if channel in ("twilio_sms", "whatsapp"):
+    if channel in ("twilio_sms", "whatsapp", "twilio_whatsapp"):
         return contact.phones[0] if contact.phones else ""
     if channel == "email":
         return contact.emails[0] if contact.emails else ""
@@ -54,10 +54,20 @@ def send_message(session: Session, tenant: Tenant, message_id: uuid.UUID) -> Mes
         raise LookupError("conversation has no contact")
     if contact.consent.get("status") == "opted_out":
         raise PermissionError("contact has opted out")
-    cfg = tenant.settings.get("channels", {}).get(msg.channel, {}).get("config", {})
+    channels = tenant.settings.get("channels", {})
+    cfg = channels.get(msg.channel, {}).get("config", {})
+    if msg.channel == "twilio_whatsapp" and not cfg.get("number"):
+        # One approved Twilio number takes texts, calls and WhatsApp.
+        cfg = {**cfg, "number": channels.get("twilio_sms", {}).get("config", {}).get("number")}
     to = destination_for(contact, msg.channel)
     if msg.channel == "whatsapp" and not _window_open(session, conv):
         ref = _send_update_template(session, tenant, contact, msg, to, cfg)
+    elif msg.channel == "twilio_whatsapp" and not _window_open(session, conv):
+        # WhatsApp's 24-hour rule applies through Twilio too; templates through Twilio are
+        # not built yet, so a person follows up.
+        raise ReplyWindowClosedError(
+            "outside WhatsApp's 24-hour reply window (templates via Twilio not set up)"
+        )
     else:
         ref = get_adapter(msg.channel).send(to=to, body=msg.body, tenant_channel_config=cfg)
     # provider_ref and delivered_at are the only columns the app may set after insert,

@@ -13,6 +13,7 @@ reply is executed last so it can carry that line.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -26,7 +27,13 @@ from novaxis_core.alerts import needs_a_person
 from novaxis_core.approval_model import record_prediction
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
-from novaxis_core.intake import out_of_area, prompt_block
+from novaxis_core.intake import (
+    EXTRACTION_PROMPT,
+    extraction_block,
+    out_of_area,
+    parse_extraction,
+    prompt_block,
+)
 from novaxis_core.intake import status as intake_status
 from novaxis_core.llm import LLMClient, LLMResult, ToolCall
 from novaxis_core.media import text_of
@@ -60,6 +67,7 @@ SUMMARISE_PROMPT = (
     "facts given, what was proposed, what is outstanding. No greetings."
 )
 FALLBACK_REPLY = "Thanks, one moment while I check that with the team."
+log = logging.getLogger("novaxis.turn")
 
 
 @dataclass
@@ -242,6 +250,56 @@ def _has_proposal(session: Session, conv: Conversation, kind: str) -> bool:
     )
 
 
+def _extract_intake(
+    session: Session,
+    tenant: Tenant,
+    pack: PackSpec,
+    llm: LLMClient,
+    conv: Conversation,
+    history: list[Message],
+    last_inbound: Message,
+    ctx: GateContext,
+) -> None:
+    """Record the intake answers in the customer's latest message with a small JSON call,
+    before the reply. Open models answer JSON far more reliably than they call tools, so
+    intake (and the booking the engine proposes when it is complete) does not depend on
+    the reply model choosing to call extract_fields. Goes through the gate like any
+    proposal; a failure here only means the reply model is on its own."""
+    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    if intake_status(pack.intake, plain).complete:
+        return
+    asked = next(
+        (
+            m.body
+            for m in reversed(history)
+            if m.direction == "outbound" and m.created_at <= last_inbound.created_at
+        ),
+        "",
+    )
+    said = f"The assistant asked: {asked}\n\n" if asked else ""
+    try:
+        result = llm.complete(
+            task="classify",
+            system_stable=EXTRACTION_PROMPT,
+            system_volatile=extraction_block(pack.intake),
+            messages=[
+                {"role": "user", "content": f"{said}The customer said: {text_of(last_inbound)}"}
+            ],
+            max_tokens=400,
+        )
+    except Exception:  # noqa: BLE001 - extraction is a helper; the turn must go on
+        log.warning("intake extraction failed for conversation %s", conv.id, exc_info=True)
+        return
+    record_usage(session, tenant, conv.id, "classify", result)
+    fields = parse_extraction(result.text, pack.intake)
+    fields = {k: v for k, v in fields.items() if plain.get(k) != v}
+    if fields:
+        propose(
+            session, tenant, conv, "extract_fields", {"fields": fields}, ctx, "intake extraction"
+        )
+        session.refresh(conv)
+
+
 def run_turn(
     session: Session,
     tenant: Tenant,
@@ -345,6 +403,8 @@ def run_turn(
             alerted=alerted,
         )
     else:
+        if pack.intake and last_inbound and settings.intake_extraction:
+            _extract_intake(session, tenant, pack, llm, conv, history, last_inbound, ctx)
         system_volatile = tenant_facts(tenant)
         if conv.summary:
             system_volatile += f"\n\nSummary of the conversation so far:\n{conv.summary}"

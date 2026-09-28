@@ -187,6 +187,15 @@ async def twilio_sms(request: Request) -> Response:
     return Response(content="<Response></Response>", media_type="text/xml")
 
 
+@router.post("/twilio/whatsapp")
+async def twilio_whatsapp(request: Request) -> Response:
+    """WhatsApp through Twilio (the sandbox or an approved Twilio number): as for SMS."""
+    req = await _to_inbound_request(request)
+    inbound = _verify_and_parse("twilio_whatsapp", req)
+    _route_and_ingest(inbound)
+    return Response(content="<Response></Response>", media_type="text/xml")
+
+
 @router.post("/email/postmark")
 async def email_postmark(request: Request) -> dict[str, Any]:
     req = await _to_inbound_request(request)

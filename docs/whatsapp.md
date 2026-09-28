@@ -4,7 +4,39 @@ Customers message the business on WhatsApp and the assistant answers there. It's
 assistant as every other channel: packs, approval step, emergency pre-check, bookings,
 hand-offs.
 
-Built on **Meta's WhatsApp Cloud API** directly (no middleman). Code:
+Two ways in, same assistant:
+
+| | **Through Twilio (start here)** | Meta's Cloud API directly |
+|---|---|---|
+| Setup | Twilio account you already have; the sandbox works in minutes | Meta developer app, business verification, tokens, webhook review |
+| Code | `channels/twilio_whatsapp.py`, `POST /inbound/twilio/whatsapp` | `channels/whatsapp.py`, `GET/POST /inbound/whatsapp` |
+| Replies after 24 hours | Go to a person (Twilio templates not built yet) | The approved `novaxis_update` template |
+
+## Through Twilio (the MVP path)
+
+**Testing today, with the Twilio WhatsApp sandbox** [VERIFY the current console path]:
+1. Twilio console → Messaging → Try it out → **Send a WhatsApp message**. Note the sandbox
+   number (e.g. `+14155238886`) and the join words (`join something-something`).
+2. In the sandbox settings, set **"When a message comes in"** to
+   `https://novaxis-api.vercel.app/inbound/twilio/whatsapp` (HTTP POST).
+3. Novaxis (operator) sets the business's WhatsApp number to the sandbox number:
+   `channels.twilio_whatsapp = {"enabled": true, "config": {"number": "+14155238886"}}`.
+   One business at a time can use the sandbox number.
+4. From your phone, WhatsApp the join words to the sandbox number, then write as a
+   customer would. The assistant answers on WhatsApp.
+
+**For real customers:** in Twilio, register the business's Twilio number as a WhatsApp
+sender (Twilio guides you through Meta's approval; it is lighter than doing it yourself)
+[VERIFY time and cost]. Then the owner ticks **Settings → Channels → Answer WhatsApp
+messages** and nothing else: with no separate WhatsApp number set, the business's SMS
+number takes texts, calls and WhatsApp.
+
+Signatures, replays, photos, voice notes (transcribed), STOP, one contact across SMS and
+WhatsApp, and the 24-hour rule all work as below.
+
+## Meta's Cloud API directly
+
+Built on **Meta's WhatsApp Cloud API** (no middleman). Code:
 `packages/core/novaxis_core/channels/whatsapp.py`, routes `GET/POST /inbound/whatsapp`.
 
 ## What it handles

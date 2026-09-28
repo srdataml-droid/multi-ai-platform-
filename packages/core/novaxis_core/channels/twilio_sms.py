@@ -40,6 +40,19 @@ def _public_url(request_url: str) -> str:
     return urlunsplit((base.scheme, base.netloc, seen.path, seen.query, ""))
 
 
+def signed_url_candidates(request: InboundRequest) -> list[str]:
+    """Every public URL Twilio may have signed. The API answers on more than one address
+    (novaxis-api.vercel.app and the project's long Vercel address); Twilio signs the one
+    the owner typed into the console. Checking each is as safe as checking one: a match
+    still needs our auth token."""
+    seen = urlsplit(request.url)
+    urls = [_public_url(request.url)]
+    host = request.header("X-Forwarded-Host") or request.header("Host")
+    if host:
+        urls.append(urlunsplit(("https", host.split(",")[0].strip(), seen.path, seen.query, "")))
+    return list(dict.fromkeys(urls))
+
+
 class TwilioSmsAdapter:
     channel = "twilio_sms"
 
@@ -51,8 +64,10 @@ class TwilioSmsAdapter:
         given = request.header("X-Twilio-Signature")
         if not token or not given:
             return False
-        expected = compute_signature(token, _public_url(request.url), request.form)
-        return hmac.compare_digest(given, expected)
+        return any(
+            hmac.compare_digest(given, compute_signature(token, url, request.form))
+            for url in signed_url_candidates(request)
+        )
 
     def parse_inbound(self, request: InboundRequest) -> NormalisedInbound:
         f = request.form
