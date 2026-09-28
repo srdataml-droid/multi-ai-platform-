@@ -79,7 +79,7 @@ def agent_db(caller: Caller) -> Iterator[Session]:
         yield s
 
 
-AgentDb = Annotated[Session, Depends(agent_db)]
+AgentDb = Annotated[Session, Depends(agent_db, scope="function")]  # commit, then respond
 
 
 def _tenant(session: Session) -> Tenant:

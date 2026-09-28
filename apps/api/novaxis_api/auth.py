@@ -97,4 +97,8 @@ def db(principal: CurrentPrincipal) -> Iterator[Session]:
         yield s
 
 
-TenantDb = Annotated[Session, Depends(db)]
+# scope="function": the session commits when the route returns, before the response is
+# sent. With the default, FastAPI sends the response first and commits afterwards, so a
+# client could read before its own write landed, or be told "saved" for a write whose
+# commit then failed (test_writes_are_committed_before_the_response).
+TenantDb = Annotated[Session, Depends(db, scope="function")]
