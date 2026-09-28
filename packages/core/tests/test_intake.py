@@ -79,9 +79,11 @@ def test_prompt_block_names_next_question_and_key() -> None:
     assert (
         "Ask next, in your own words: Which?" in block and "under the key 'problem_type'" in block
     )
-    assert "Intake is complete." in prompt_block(
+    done = prompt_block(
         Q, {"name": "Al", "problem_type": "service", "postcode": "SW1A 1AA", "phone": "07700900123"}
     )
+    assert "Intake is complete." in done and "Do not ask the customer any" in done
+    assert "Ask next" not in done
 
 
 def test_out_of_area() -> None:

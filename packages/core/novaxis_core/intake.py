@@ -81,7 +81,13 @@ def prompt_block(questions: list[IntakeQuestion], extracted: dict[str, Any]) -> 
         extra = f" (one of: {', '.join(q.choices)})" if q.choices else ""
         lines.append(f"- {q.key}{extra}: {mark}")
     if st.complete:
-        lines.append("Intake is complete.")
+        # Without this, open models re-ask a question from the list above (seen live on
+        # gpt-oss:120b, 2026-09-28).
+        lines.append(
+            "Intake is complete. Do not ask the customer any of these questions again. "
+            "Thank them, say you have what you need and that the team will be in touch "
+            "to confirm the next step; answer anything they asked."
+        )
     elif st.next_question:
         lines.append(f"Ask next, in your own words: {st.next_question.ask}")
         lines.append(
