@@ -7,7 +7,7 @@ import { post } from "@/lib/api";
 import { STATUS_LABEL, when } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
-type Msg = { id: string; direction: string; author: string; body: string; at: string; media?: { url: string | null; content_type: string | null; filename: string | null; error: string | null }[] };
+type Msg = { id: string; direction: string; author: string; body: string; at: string; media?: { url: string | null; content_type: string | null; filename: string | null; error: string | null; transcript?: string | null; transcript_error?: string | null }[] };
 type Conv = { id: string; status: string; channel: string; summary: string | null; contact: { display_name: string | null; consent: { status?: string } }; extracted: Record<string, string>; sensitive_keys: string[]; messages: Msg[] };
 
 export default function ConversationPage() {
@@ -49,7 +49,13 @@ export default function ConversationPage() {
               <div key={m.id} className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${m.direction === "inbound" ? "self-start bg-slate-100" : m.author === "human" ? "self-end bg-emerald-100" : "self-end bg-blue-100"}`}>
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">{m.author} · {when(m.at)}</div>
                 <div className="whitespace-pre-wrap">{m.body}</div>
-                {m.media?.map((x, i) => x.url ? <a key={i} href={`/api${x.url}`} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-blue-700 underline">{x.filename ?? x.content_type ?? "attachment"}</a> : <span key={i} className="mt-1 block text-xs text-red-600">{x.error}</span>)}
+                {m.media?.map((x, i) => (
+                  <div key={i}>
+                    {x.url ? <a href={`/api${x.url}`} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-blue-700 underline">{x.content_type?.startsWith("audio/") ? "voice note" : x.filename ?? x.content_type ?? "attachment"}</a> : <span className="mt-1 block text-xs text-red-600">{x.error}</span>}
+                    {x.transcript && <p className="mt-1 text-sm italic" data-testid="transcript">&ldquo;{x.transcript}&rdquo; <span className="not-italic text-xs text-slate-500">(transcribed)</span></p>}
+                    {!x.transcript && x.transcript_error && <p className="mt-1 text-xs text-slate-500">Voice note not transcribed: {x.transcript_error}</p>}
+                  </div>
+                ))}
               </div>
             ))}
           </div>

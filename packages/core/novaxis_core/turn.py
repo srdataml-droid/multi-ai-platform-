@@ -29,6 +29,7 @@ from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.intake import out_of_area, prompt_block
 from novaxis_core.intake import status as intake_status
 from novaxis_core.llm import LLMClient, LLMResult, ToolCall
+from novaxis_core.media import text_of
 from novaxis_core.models import (
     ActionProposal,
     AuditLog,
@@ -122,7 +123,7 @@ def build_messages(history: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for m in history:
         role = "user" if m.direction == "inbound" else "assistant"
-        body = m.body
+        body = text_of(m) if m.direction == "inbound" else m.body
         if m.direction == "outbound" and m.author == "human":
             body = f"[staff member]: {body}"
         if out and out[-1]["role"] == role:
@@ -279,13 +280,14 @@ def run_turn(
     ctx = GateContext(
         tenant_settings=tenant.settings,
         contact_consent=contact.consent,
-        latest_inbound_text=last_inbound.body if last_inbound else "",
+        latest_inbound_text=text_of(last_inbound) if last_inbound else "",
         conversation_channel=conv.channel,
         pack_rule=pack.rule,
     )
     result_ids: list[uuid.UUID] = []
     decisions: dict[str, str] = {}
-    emergency = bool(last_inbound and _emergency_hit(pack, last_inbound.body))
+    # Voice notes count: "I can smell gas" said out loud is heard through its transcript.
+    emergency = bool(last_inbound and _emergency_hit(pack, text_of(last_inbound)))
     tool_calls: list[ToolCall] = []
 
     if blocked_reason and not emergency:
@@ -323,7 +325,7 @@ def run_turn(
             tenant,
             conv,
             "escalate_emergency",
-            {"summary": last_inbound.body[:500] if last_inbound else ""},
+            {"summary": text_of(last_inbound)[:500] if last_inbound else ""},
             ctx,
             "emergency keyword",
         )

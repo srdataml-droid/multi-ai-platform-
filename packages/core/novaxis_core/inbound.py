@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.channels import NormalisedInbound, get_adapter
-from novaxis_core.media import attach_media
+from novaxis_core.media import attach_media, voice_pending
 from novaxis_core.models import (
     Appointment,
     AuditLog,
@@ -280,6 +280,20 @@ def ingest(session: Session, tenant: Tenant, inbound: NormalisedInbound) -> Inge
             return IngestResult(contact.id, conv.id, msg.id, confirmed)
     if conv.status == "waiting_customer":
         conv.status = "open"
+    if voice_pending(msg):
+        # The assistant must hear the voice note first: the fetch-and-transcribe job
+        # queues this turn when it is done. It carries the conversation id, so if it
+        # fails for good the job loop hands the conversation to a person.
+        fetch = session.scalar(
+            select(Job).where(
+                Job.kind == "fetch_media", Job.payload["message_id"].astext == str(msg.id)
+            )
+        )
+        if fetch is not None:
+            fetch.payload = {**fetch.payload, "then_turn": True, "conversation_id": str(conv.id)}
+            session.flush()
+            _audit(session, tenant.id, "message.received", message_id=msg.id, job_id=fetch.id)
+            return IngestResult(contact.id, conv.id, msg.id, fetch.id)
     job = Job(
         tenant_id=tenant.id,
         kind="worker_turn",

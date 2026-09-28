@@ -35,10 +35,6 @@ from novaxis_core.channels.base import (
 from novaxis_core.settings import get_settings
 
 MEDIA_PREFIX = "whatsapp-media:"
-VOICE_NOTE = (
-    "[The customer sent a voice note. Voice notes cannot be played here yet; "
-    "ask them kindly to type their message.]"
-)
 
 # The template each business submits to Meta (docs/whatsapp.md), category Utility.
 # {{1}} customer's name, {{2}} business name, {{3}} the message itself.
@@ -109,7 +105,12 @@ def _text_of(m: dict[str, Any]) -> tuple[str, list[Media]]:
         )
         return str(part.get("caption") or ""), [media]
     if kind == "audio":
-        return VOICE_NOTE, []
+        part = m.get("audio") or {}
+        media = Media(
+            url=MEDIA_PREFIX + str(part.get("id", "")),
+            content_type=part.get("mime_type") or "audio/ogg",
+        )
+        return "", [media]  # transcribed by the media job (media.py, stt.py)
     if kind == "interactive":
         i = m.get("interactive") or {}
         reply = i.get("button_reply") or i.get("list_reply") or {}

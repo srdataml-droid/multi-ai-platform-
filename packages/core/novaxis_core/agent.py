@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
 from novaxis_core.gate import GateContext
+from novaxis_core.media import text_of
 from novaxis_core.models import (
     ActionProposal,
     AgentKey,
@@ -220,7 +221,7 @@ def context(session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation
                 "from": "customer"
                 if m.direction == "inbound"
                 else ("staff" if m.author == "human" else "assistant"),
-                "text": m.body,
+                "text": text_of(m) if m.direction == "inbound" else m.body,
                 "at": m.created_at.isoformat(),
                 "attachments": len(m.media or []),
             }
@@ -259,7 +260,7 @@ def gate_context(
     return GateContext(
         tenant_settings=tenant.settings,
         contact_consent=contact.consent if contact else {},
-        latest_inbound_text=last_inbound.body if last_inbound else "",
+        latest_inbound_text=text_of(last_inbound) if last_inbound else "",
         conversation_channel=conv.channel,
         pack_rule=pack.rule,
     )

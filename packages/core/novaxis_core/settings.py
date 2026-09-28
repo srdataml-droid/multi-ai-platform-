@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_anon_key: str = ""
     media_max_bytes: int = 10 * 1024 * 1024
-    media_allowed_types: tuple[str, ...] = ("image/", "application/pdf", "video/mp4")
+    media_allowed_types: tuple[str, ...] = ("image/", "application/pdf", "video/mp4", "audio/")
     # Local: Mailpit; production: unused when Postmark is configured.
     smtp_host: str = "localhost"
     smtp_port: int = 1025
@@ -90,6 +90,15 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"
     llm_base_url: str = "http://localhost:11434/v1"  # Ollama's default
     llm_api_key: str = ""
+    # Speech to text for voice notes (stt.py, docs/voice-notes.md): "none", "openai_compatible"
+    # (any OpenAI-style /audio/transcriptions server: self-hosted Whisper, Groq, OpenAI) or
+    # "fake" (tests).
+    stt_provider: str = "none"
+    stt_base_url: str = ""
+    stt_api_key: str = ""
+    stt_model: str = "whisper-large-v3-turbo"
+    stt_language: str = ""  # empty: detected from the audio
+    fake_transcript: str = "This is a test voice note."
     model_worker: str = "claude-sonnet-5"
     model_classify: str = "claude-haiku-4-5"
     model_summarise: str = "claude-haiku-4-5"

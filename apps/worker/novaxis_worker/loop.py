@@ -143,6 +143,19 @@ def _handle_rollup(session: Session, tenant: Tenant, job: Job) -> None:
 
 def _handle_fetch_media(session: Session, tenant: Tenant, job: Job) -> None:
     fetch_media(session, tenant, uuid.UUID(job.payload["message_id"]))
+    if job.payload.get("then_turn"):
+        # A voice note: now that it is transcribed (or known not to be), the assistant
+        # answers it (inbound.py).
+        session.add(
+            Job(
+                tenant_id=tenant.id,
+                kind="worker_turn",
+                payload={
+                    "conversation_id": job.payload["conversation_id"],
+                    "message_id": job.payload["message_id"],
+                },
+            )
+        )
 
 
 def _handle_report_usage(session: Session, tenant: Tenant, job: Job) -> None:

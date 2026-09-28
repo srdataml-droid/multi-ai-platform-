@@ -13,7 +13,7 @@ Built on **Meta's WhatsApp Cloud API** directly (no middleman). Code:
 |---|---|
 | Text | A normal message |
 | Photo, document, video, sticker (with or without caption) | Stored like any photo: downloaded with the WhatsApp token, shown to staff |
-| Voice note | Not transcribed yet. The assistant is told a voice note arrived and asks the customer to type |
+| Voice note | Transcribed with Whisper before the assistant answers (docs/voice-notes.md); without speech to text set up, the assistant asks the customer to type |
 | Button or list reply | The chosen option's text |
 | Location | "Location: name, address, lat,long" |
 | "STOP" / "unsubscribe" | Opted out, as for SMS and email ("cancel" with a booking cancels the booking instead) |

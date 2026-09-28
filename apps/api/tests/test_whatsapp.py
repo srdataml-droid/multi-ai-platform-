@@ -16,7 +16,7 @@ from sqlalchemy import select, update
 
 from novaxis_api.main import create_app
 from novaxis_core.channels import register_adapter
-from novaxis_core.channels.whatsapp import MEDIA_PREFIX, VOICE_NOTE, WhatsAppAdapter, signature
+from novaxis_core.channels.whatsapp import MEDIA_PREFIX, WhatsAppAdapter, signature
 from novaxis_core.executors import execute
 from novaxis_core.media import fetch_media
 from novaxis_core.models import ActionProposal, Contact, Conversation, Job, Message, Tenant
@@ -126,7 +126,9 @@ def test_signed_messages_are_ingested_once_and_receipts_or_strangers_are_ignored
     assert _post(client, _payload(_text(_wa(), "hello")), secret="wrong").status_code == 403
 
 
-def test_voice_notes_ask_for_text_and_photos_are_fetched_with_the_token(client: TestClient) -> None:
+def test_voice_notes_arrive_as_audio_and_photos_are_fetched_with_the_token(
+    client: TestClient,
+) -> None:
     sender = _wa()
     photo = {
         "from": sender,
@@ -152,7 +154,8 @@ def test_voice_notes_ask_for_text_and_photos_are_fetched_with_the_token(client: 
                 select(Message).where(Message.provider_ref.in_([photo["id"], note["id"]]))
             )
         }
-        assert VOICE_NOTE in rows
+        voice = rows[""]  # transcribed by the media job (test_voice_notes.py)
+        assert voice.media[0]["audio"] is True and voice.media[0]["url"] == MEDIA_PREFIX + "A1"
         pic = rows["the leak"]
         assert pic.media[0]["url"] == MEDIA_PREFIX + "MEDIA1"
         pic_id = pic.id
