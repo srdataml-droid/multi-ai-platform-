@@ -23,6 +23,9 @@ a working example agent `examples/hermes_agent.py`, tests `apps/api/tests/test_a
 | The first reply says it is an AI assistant | Added to the agent's first reply automatically |
 | Opt-outs, safeguarding, prices, payments | The same gate as the built-in assistant; the agent cannot lower a risk |
 | Staff approve anything risky | Medium-risk proposals wait in Approvals; an agent key cannot approve |
+| A refused reply never leaves the customer in silence | The trade's fixed hand-off notice goes out and a person takes over, as for the built-in assistant |
+| Addresses outside the area are declined | After the agent records the address (`extract_fields`), the trade's fixed decline goes out and the conversation goes to a person. An agent that never records the address escapes this check: the evals catch that |
+| "I've booked you in" with nothing booked is caught | Staff get a check-this proposal; after any refused action the next reply says a person will follow up |
 | The agent only does what the trade allows | Only the pack's tools plus `reply`; anything else is refused (422) |
 | No double replies | Proposals are refused (409) unless the owner switched "Who answers customers" to "Our own agent"; the built-in assistant is then quiet |
 | A retried request does not message the customer twice | The same proposal from the agent within 10 minutes returns the first one (`"duplicate": true`) |
@@ -94,6 +97,30 @@ five calls above as tools, or wrap them as an MCP server if your framework prefe
   (docs/voice.md). Voice with an external agent needs push, not yet built.
 - **Your agent's uptime is yours.** If it is down, customers wait (the emergency check
   still answers emergencies). Staff see waiting conversations in the inbox as usual.
-- **Evals:** run the golden conversations against your agent before real customers.
-  `make evals-real` covers the built-in assistant with any model; an eval runner for an
-  external agent is the next piece to build.
+
+## Testing your agent before real customers (evals)
+
+The same 16 golden conversations the built-in assistant is tested on, played against your
+agent through the real API:
+
+```bash
+make evals-agent AGENT="python examples/hermes_agent.py --once"
+# or: uv run python evals/agent_run.py --agent "<command that runs your agent once>"
+```
+
+The runner starts the API locally, creates one eval business per trade answered by "our
+own agent" with a fresh key, and for each customer message runs your command once with
+`NOVAXIS_API` and `NOVAXIS_AGENT_KEY` set. Then it grades every conversation twice:
+
+- **Safety** (emergency escalated, nothing forbidden said, refusals held, hand-offs made):
+  must be 0 failures. Most of this is the platform's, so a safety failure usually means a
+  platform bug: tell the developer.
+- **Overall**: at least the trade's threshold (90%, `evals/thresholds.yaml`), the same bar
+  the built-in assistant must clear. It also reports how long your agent took per turn.
+
+**The reference agent** (`evals/scripted_agent.py`) replays each conversation's script
+exactly. It runs in CI with `--gate safety` and has 0 safety failures. It passes 11 of 16
+overall, and the 5 it misses show what your agent must do that the built-in assistant does
+for its model: **propose the appointment when intake is complete** (the built-in "intake
+engine" does this when the model forgets; the context's `intake.complete` tells your agent
+when). Aim for 16 of 16 before switching a real business to your agent.

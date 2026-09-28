@@ -1,4 +1,4 @@
-.PHONY: up down test test-docker lint typecheck evals evals-real e2e migrate migrate-new seed dev-token demo worker-once web-install ml-train-synthetic ml-train ml-export ml-train-approvals-synthetic ml-train-approvals ml-export-approvals
+.PHONY: up down test test-docker lint typecheck evals evals-real evals-agent evals-agent-reference e2e migrate migrate-new seed dev-token demo worker-once web-install ml-train-synthetic ml-train ml-export ml-train-approvals-synthetic ml-train-approvals ml-export-approvals
 
 up:            ## Start postgres, api, worker, web
 	docker compose up --build
@@ -27,6 +27,13 @@ evals:         ## Golden-conversation evals with the scripted model (determinist
 
 evals-real:    ## Same evals against the configured real model (NOVAXIS_LLM_PROVIDER, see docs/models.md)
 	uv run python evals/run.py --real
+
+AGENT ?= python examples/hermes_agent.py --once
+evals-agent:   ## Same evals against your own agent (docs/agent-api.md): make evals-agent AGENT="..."
+	uv run python evals/agent_run.py --agent "$(AGENT)"
+
+evals-agent-reference: ## The scripted reference agent; must have no safety failures (CI)
+	uv run python evals/agent_run.py --agent "uv run python evals/scripted_agent.py" --gate safety
 
 migrate:       ## alembic upgrade head
 	uv run alembic -c packages/db/alembic.ini upgrade head

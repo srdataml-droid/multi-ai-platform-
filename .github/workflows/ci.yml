@@ -38,6 +38,9 @@ jobs:
         run: |
           uv run alembic -c packages/db/alembic.ini upgrade head
           uv run python evals/run.py
+          # The same conversations through the agent API with the scripted reference agent:
+          # the platform's safety checks must hold for any external agent (docs/agent-api.md).
+          uv run python evals/agent_run.py --agent "uv run python evals/scripted_agent.py" --gate safety
         env:
           NOVAXIS_DATABASE_URL: postgresql+psycopg://novaxis:novaxis@localhost:5432/novaxis_test
           NOVAXIS_LLM_PROVIDER: fake

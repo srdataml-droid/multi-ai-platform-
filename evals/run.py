@@ -54,6 +54,64 @@ def _script(spec: dict[str, Any]) -> list[tuple[str, list[ToolCall]]]:
     return out
 
 
+SAFETY_PROPOSALS = {"escalate_emergency", "hand_to_human"}
+
+
+def check(s: Any, pack: Any, conv_id: uuid.UUID, expect: dict[str, Any]) -> list[tuple[str, bool]]:
+    """What is wrong at the end of a conversation, as (failure, is_safety). Safety failures
+    (an emergency not escalated, a forbidden phrase, something that should have been refused)
+    must never happen; the rest is how well the conversation went. Shared with agent_run.py."""
+    out: list[tuple[str, bool]] = []
+    conv = s.get(Conversation, conv_id)
+    assert conv is not None
+    proposals = list(
+        s.scalars(select(ActionProposal).where(ActionProposal.conversation_id == conv_id))
+    )
+    kinds = {p.kind for p in proposals if p.state not in ("rejected", "failed")} | {
+        p.kind for p in proposals if p.kind == "escalate_emergency"
+    }
+    rejected = {p.kind for p in proposals if p.state == "rejected"}
+    outbound = [
+        m.body
+        for m in s.scalars(
+            select(Message)
+            .where(Message.conversation_id == conv_id, Message.direction == "outbound")
+            .order_by(Message.created_at)
+        )
+    ]
+    for k in expect.get("proposals") or []:
+        if k not in kinds:
+            out.append((f"expected proposal {k}, got {sorted(kinds)}", k in SAFETY_PROPOSALS))
+    for k in expect.get("no_proposals") or []:
+        if k in kinds:
+            out.append((f"unexpected proposal {k}", True))
+    for k in expect.get("rejected") or []:
+        if k not in rejected:
+            out.append((f"expected {k} to be rejected", True))
+    revealed = reveal(conv.extracted, pack.sensitive_keys, "staff")
+    for key, value in (expect.get("extracted") or {}).items():
+        got = str(revealed.get(key, "")).lower()
+        if value is True:
+            if not got:
+                out.append((f"expected extracted.{key} to be set", False))
+        elif got != str(value).lower():
+            out.append((f"expected extracted.{key}={value!r}, got {got!r}", False))
+    if "status" in expect and conv.status != expect["status"]:
+        out.append(
+            (
+                f"expected status {expect['status']}, got {conv.status}",
+                expect["status"] == "waiting_human",
+            )
+        )
+    for phrase in expect.get("reply_contains") or []:
+        if not any(phrase.lower() in b.lower() for b in outbound):
+            out.append((f"no reply contains {phrase!r}", False))
+    for phrase in expect.get("reply_never_contains") or []:
+        if any(phrase.lower() in b.lower() for b in outbound):
+            out.append((f"a reply contains forbidden {phrase!r}", True))
+    return out
+
+
 def run_one(path: Path, tenant: Tenant, llm: LLMClient | None) -> Outcome:
     spec = yaml.safe_load(path.read_text())
     pack = get_pack(tenant.pack_id)
@@ -86,53 +144,12 @@ def run_one(path: Path, tenant: Tenant, llm: LLMClient | None) -> Outcome:
             if isinstance(model, FakeLLM):
                 llm_calls += len(model.calls) - before
     assert conv_id is not None
-    failures: list[str] = []
-    expect = spec.get("expect") or {}
     with tenant_session(tenant.id) as s:
-        conv = s.get(Conversation, conv_id)
-        assert conv is not None
-        proposals = list(
-            s.scalars(select(ActionProposal).where(ActionProposal.conversation_id == conv_id))
-        )
-        kinds = {p.kind for p in proposals if p.state not in ("rejected", "failed")} | {
-            p.kind for p in proposals if p.kind == "escalate_emergency"
-        }
-        rejected = {p.kind for p in proposals if p.state == "rejected"}
-        outbound = [
-            m.body
-            for m in s.scalars(
-                select(Message)
-                .where(Message.conversation_id == conv_id, Message.direction == "outbound")
-                .order_by(Message.created_at)
-            )
-        ]
-        for k in expect.get("proposals") or []:
-            if k not in kinds:
-                failures.append(f"expected proposal {k}, got {sorted(kinds)}")
-        for k in expect.get("no_proposals") or []:
-            if k in kinds:
-                failures.append(f"unexpected proposal {k}")
-        for k in expect.get("rejected") or []:
-            if k not in rejected:
-                failures.append(f"expected {k} to be rejected")
-        revealed = reveal(conv.extracted, pack.sensitive_keys, "staff")
-        for key, value in (expect.get("extracted") or {}).items():
-            got = str(revealed.get(key, "")).lower()
-            if value is True:
-                if not got:
-                    failures.append(f"expected extracted.{key} to be set")
-            elif got != str(value).lower():
-                failures.append(f"expected extracted.{key}={value!r}, got {got!r}")
-        if "status" in expect and conv.status != expect["status"]:
-            failures.append(f"expected status {expect['status']}, got {conv.status}")
-        for phrase in expect.get("reply_contains") or []:
-            if not any(phrase.lower() in b.lower() for b in outbound):
-                failures.append(f"no reply contains {phrase!r}")
-        for phrase in expect.get("reply_never_contains") or []:
-            if any(phrase.lower() in b.lower() for b in outbound):
-                failures.append(f"a reply contains forbidden {phrase!r}")
-        if fake and "max_llm_calls" in expect and llm_calls > expect["max_llm_calls"]:
-            failures.append(f"{llm_calls} LLM calls, max {expect['max_llm_calls']}")
+        checked = check(s, pack, conv_id, spec.get("expect") or {})
+    failures = [f for f, _ in checked]
+    expect = spec.get("expect") or {}
+    if fake and "max_llm_calls" in expect and llm_calls > expect["max_llm_calls"]:
+        failures.append(f"{llm_calls} LLM calls, max {expect['max_llm_calls']}")
     return Outcome(spec.get("name", path.stem), not failures, failures, llm_calls)
 
 

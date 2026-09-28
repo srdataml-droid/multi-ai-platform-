@@ -24,9 +24,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from novaxis_core.alerts import needs_a_person
 from novaxis_core.gate import GateContext
 from novaxis_core.models import (
     ActionProposal,
@@ -291,7 +292,7 @@ def agent_propose(
     """Returns (proposal, created). An identical proposal from an agent in the last ten
     minutes is returned instead of a second one, so a retried request never sends a
     customer the same message twice."""
-    from novaxis_core.turn import disclosure_for, propose
+    from novaxis_core.turn import BOOKING_CLAIMS, disclosure_for, propose
 
     names = {t["name"] for t in allowed_tools(pack)}
     if kind not in names:
@@ -316,23 +317,122 @@ def agent_propose(
 
     if not _open(conv):
         raise AgentError(f"conversation is {conv.status}; a person or nobody should act on it")
-    if disclosure and _first_reply(session, conv) and not text.startswith(disclosure):
-        params = with_disclosure
+    ctx = gate_context(session, tenant, pack, conv)
+    origin = f"agent:{key.name}"
+    if kind == "reply":
+        text = str(params.get("text", ""))
+        # As turn.py: a refused action earlier in this exchange means the customer is told
+        # a person will follow up, and a reply claiming a booking with nothing behind it is
+        # flagged for staff.
+        if _refused_since_last_reply(session, conv) and pack.high_risk_followup not in text:
+            params = {**params, "text": f"{text}\n\n{pack.high_risk_followup}"}
+        if BOOKING_CLAIMS.search(text) and not _claim_backed(session, conv):
+            propose(
+                session,
+                tenant,
+                conv,
+                "verify_claim",
+                {"text": text},
+                ctx,
+                f"{origin}: reply claims a booking without a proposal",
+            )
+        if disclosure and _first_reply(session, conv) and not text.startswith(disclosure):
+            params = {**params, "text": f"{disclosure}\n\n{params['text']}"}
 
-    p, _ = propose(
-        session,
-        tenant,
-        conv,
-        kind,
-        params,
-        gate_context(session, tenant, pack, conv),
-        f"agent:{key.name}",
-    )
+    p, _ = propose(session, tenant, conv, kind, params, ctx, origin)
+
+    if kind == "reply" and p.state == "rejected":
+        # As turn.py: the agent's words were refused, so a fixed, safe notice goes to the
+        # customer and a person takes over. The agent is not asked to try again.
+        conv.status = "waiting_human"
+        needs_a_person(session, tenant.id, conv.id)
+        propose(
+            session,
+            tenant,
+            conv,
+            "handoff_notice",
+            {"text": pack.handoff_notice},
+            ctx,
+            f"reply refused: {p.reason}",
+        )
+    elif kind == "extract_fields" and p.state == "executed":
+        _service_area(session, tenant, pack, conv, ctx)
     if kind == "reply" and p.state == "executed" and conv.status == "open":
         conv.status = "waiting_customer"
     conv.updated_at = datetime.now(UTC)
     session.flush()
     return p, True
+
+
+def _refused_since_last_reply(session: Session, conv: Conversation) -> bool:
+    last_out = session.scalar(
+        select(func.max(Message.created_at)).where(
+            Message.conversation_id == conv.id, Message.direction == "outbound"
+        )
+    )
+    q = select(ActionProposal.id).where(
+        ActionProposal.conversation_id == conv.id,
+        ActionProposal.state == "rejected",
+        ActionProposal.kind != "reply",
+        ActionProposal.reason.like("agent:%"),
+    )
+    if last_out is not None:
+        q = q.where(ActionProposal.created_at > last_out)
+    return session.scalar(q.limit(1)) is not None
+
+
+def _claim_backed(session: Session, conv: Conversation) -> bool:
+    from novaxis_core.turn import CLAIM_TOOLS
+
+    return (
+        session.scalar(
+            select(ActionProposal.id)
+            .where(
+                ActionProposal.conversation_id == conv.id,
+                ActionProposal.kind.in_(CLAIM_TOOLS),
+                ActionProposal.state.notin_(["rejected", "failed"]),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _service_area(
+    session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation, ctx: GateContext
+) -> None:
+    """As turn.py: an address outside the area the business covers gets the trade's fixed
+    decline and goes to a person, whatever the agent would have said next."""
+    from novaxis_core.intake import out_of_area
+    from novaxis_core.sensitive import decrypt_fields
+    from novaxis_core.turn import disclosure_for, propose
+
+    session.refresh(conv)
+    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    value = plain.get(pack.service_area_field) if pack.service_area_field else None
+    if not value or not out_of_area(str(value), tenant.settings.get("service_area") or []):
+        return
+    already = session.scalar(
+        select(ActionProposal.id).where(
+            ActionProposal.conversation_id == conv.id, ActionProposal.kind == "hand_to_human"
+        )
+    )
+    if already is not None or not pack.out_of_area_reply:
+        return
+    text = pack.out_of_area_reply
+    disclosure = disclosure_for(tenant)
+    if disclosure and _first_reply(session, conv):
+        text = f"{disclosure}\n\n{text}"
+    propose(session, tenant, conv, "reply", {"text": text}, ctx, "service area")
+    propose(
+        session,
+        tenant,
+        conv,
+        "hand_to_human",
+        {"reason": f"outside service area: {value}"},
+        ctx,
+        "service area",
+    )
 
 
 def proposal_view(p: ActionProposal) -> dict[str, Any]:

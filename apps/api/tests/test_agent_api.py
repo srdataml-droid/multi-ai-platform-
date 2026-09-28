@@ -307,3 +307,56 @@ def test_the_example_hermes_agent_works_against_the_real_api(client: TestClient)
             )
         )
         assert out is not None and out.body.startswith("Hi, I'm the AI assistant")
+
+
+def test_the_platform_checks_the_built_in_assistant_gets_apply_to_an_agent_too(
+    client: TestClient,
+) -> None:
+    """A reply refused by the gate hands over with the fixed notice; a reply claiming a
+    booking with nothing behind it is flagged for staff; after a refused action the next
+    reply says a person will follow up."""
+    agent = _key(client)
+    _external()
+    pack = get_pack("hvac")
+
+    def post(conv: uuid.UUID, kind: str, params: dict[str, Any]) -> dict[str, Any]:
+        r = client.post(
+            f"/agent/v1/conversations/{conv}/proposals",
+            json={"kind": kind, "params": params},
+            headers=agent,
+        )
+        assert r.status_code in (200, 201), r.text
+        return dict(r.json())
+
+    refused = _customer_writes("My son is 10, he's home alone and the boiler is off")
+    assert post(refused, "reply", {"text": "Is he home alone now?"})["state"] == "rejected"
+    claim = _customer_writes("Can you come Friday?")
+    post(claim, "reply", {"text": "Great, I've booked you in for Friday at 9."})
+    failed = _customer_writes("Boiler service please")
+    bad = post(failed, "propose_appointment", {"service_code": "repair_visit", "oops": 1})
+    assert bad["state"] == "rejected"
+    post(failed, "reply", {"text": "Thanks, noted."})
+
+    with tenant_session(_tenant().id) as s:
+
+        def sent(conv_id: uuid.UUID) -> list[str]:
+            return [
+                m.body
+                for m in s.scalars(
+                    select(Message).where(
+                        Message.conversation_id == conv_id, Message.direction == "outbound"
+                    )
+                )
+            ]
+
+        conv = s.get(Conversation, refused)
+        assert conv is not None and conv.status == "waiting_human"
+        assert sent(refused) == [pack.handoff_notice], "only the fixed notice went out"
+        assert s.scalar(
+            select(ActionProposal).where(
+                ActionProposal.conversation_id == claim,
+                ActionProposal.kind == "verify_claim",
+                ActionProposal.state == "awaiting",
+            )
+        ), "staff check the booking the reply claimed"
+        assert pack.high_risk_followup in sent(failed)[-1]
