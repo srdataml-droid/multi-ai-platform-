@@ -239,6 +239,24 @@ def offered_for(session: Session, conv: Conversation) -> list[Appointment]:
     return [a for a in rows if not a.hold_expires_at or a.hold_expires_at >= now]
 
 
+def last_offer(session: Session, conv: Conversation) -> list[Appointment]:
+    """The slots of the latest offer to this conversation, numbered as the customer saw
+    them, even after their hold ran out: `confirm` still books an expired hold whose slot
+    is free, and refuses one that has since been taken."""
+    rows = list(
+        session.scalars(
+            select(Appointment)
+            .where(Appointment.conversation_id == conv.id, Appointment.status == "held")
+            .order_by(Appointment.starts_at)
+        )
+    )
+    if not rows:
+        return []
+    never = datetime.min.replace(tzinfo=UTC)
+    latest = max(rows, key=lambda a: a.hold_expires_at or never).proposal_id
+    return [a for a in rows if a.proposal_id == latest]
+
+
 def widen(window: Window) -> Window:
     """When the asked-for window has nothing, look ahead from its start instead of giving up."""
     return Window(

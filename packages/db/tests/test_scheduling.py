@@ -479,18 +479,21 @@ def test_reschedule_offers_choices_and_moves_the_booking_the_customer_picks(
 
 
 @pytest.mark.parametrize(
-    "model_calls",
+    ("model_calls", "hold_ran_out"),
     [
-        [ToolCall("confirm_appointment", {"appointment_id": "2"}, "t")],  # the number, not the id
-        [],  # no tool call at all
+        ([ToolCall("confirm_appointment", {"appointment_id": "2"}, "t")], False),
+        ([ToolCall("confirm_appointment", {"appointment_id": "slot2"}, "t")], True),
+        ([], False),
+        ([], True),
     ],
-    ids=["model-passes-the-option-number", "model-calls-no-tool"],
+    ids=["option-number", "slot2-after-the-hold", "no-tool-call", "no-tool-after-the-hold"],
 )
 def test_a_bare_number_picks_that_offered_slot(
-    dental: Tenant, cal: FakeCalendar, model_calls: list[ToolCall]
+    dental: Tenant, cal: FakeCalendar, model_calls: list[ToolCall], hold_ran_out: bool
 ) -> None:
-    """Live on gpt-oss:120b the customer replied "1" and the model proposed
-    confirm_appointment with appointment_id "1", which no approval could carry out."""
+    """Live on gpt-oss:120b the customer replied "1" (once an hour after the offer, when
+    the ten-minute hold had run out) and the model proposed confirm_appointment with
+    appointment_id "1", then "slot1": nothing an approval could carry out."""
     conv_id, _ = _conv(dental, "A check-up next week please")
     with tenant_session(dental.id) as s:
         p = ActionProposal(
@@ -504,7 +507,11 @@ def test_a_bare_number_picks_that_offered_slot(
         s.add(p)
         s.flush()
         assert execute(s, dental, p).ok
-        chosen = scheduling.offered_for(s, s.get(Conversation, conv_id))[1].id  # type: ignore[arg-type]
+        held = scheduling.offered_for(s, s.get(Conversation, conv_id))  # type: ignore[arg-type]
+        chosen = held[1].id
+        if hold_ran_out:
+            for a in held:
+                a.hold_expires_at = datetime.now(UTC) - timedelta(minutes=50)
         s.add(
             Message(
                 tenant_id=dental.id,

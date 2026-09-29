@@ -48,7 +48,7 @@ from novaxis_core.models import (
 )
 from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
-from novaxis_core.scheduling import appointments_block, offered_for
+from novaxis_core.scheduling import appointments_block, last_offer
 from novaxis_core.sensitive import decrypt_fields
 from novaxis_core.settings import get_settings
 from novaxis_core.workflows import schedule_idle_steps
@@ -168,12 +168,15 @@ def record_usage(
     )
 
 
+_CHOICE = re.compile(r"^(?:slot|option|number|no\.?|choice)?\s*#?\s*(\d{1,2})\s*[.)]?$", re.I)
+
+
 def _slot_number(value: Any, held: list[Any]) -> Any:
-    """The offered slot a bare choice like "2", "2." or "#2" names, else None. Offers are
-    numbered for the customer (scheduling.offer_text)."""
-    s = str(value).strip().lstrip("#").rstrip(".)").strip()
-    if s.isdigit() and 1 <= int(s) <= len(held):
-        return held[int(s) - 1]
+    """The offered slot a bare choice names ("2", "2.", "#2", and from models "slot2" or
+    "option 2"), else None. Offers are numbered for the customer (scheduling.offer_text)."""
+    m = _CHOICE.match(str(value).strip())
+    if m and 1 <= int(m.group(1)) <= len(held):
+        return held[int(m.group(1)) - 1]
     return None
 
 
@@ -193,7 +196,7 @@ def ground_params(
         if appt is None and conv is not None:
             # Live, gpt-oss passed the option number the customer typed ("1") instead of
             # the slot's id; the offer this conversation holds says which slot that is.
-            appt = _slot_number(params.get("appointment_id", ""), offered_for(session, conv))
+            appt = _slot_number(params.get("appointment_id", ""), last_offer(session, conv))
             if appt is not None:
                 params = {**params, "appointment_id": str(appt.id)}
         if appt is not None:
@@ -251,7 +254,7 @@ def pick_offered_slot(
     )
     if last is None:
         return None
-    picked = _slot_number(text_of(last), offered_for(session, conv))
+    picked = _slot_number(text_of(last), last_offer(session, conv))
     if picked is None:
         return None
     already = session.scalar(
