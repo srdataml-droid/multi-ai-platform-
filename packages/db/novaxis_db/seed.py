@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.models import Location, Tenant, User
+from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import (
     ChannelConfig,
     DayHours,
@@ -48,6 +49,17 @@ def _channels(slug: str) -> dict[str, ChannelConfig]:
         ),
         # Calls to the same Twilio number (docs/voice.md).
         "twilio_voice": ChannelConfig(enabled=True),
+        # WhatsApp through Twilio: the heating demo takes the shared sandbox number, which
+        # anyone joins from any phone (docs/whatsapp.md). One business per number.
+        **(
+            {
+                "twilio_whatsapp": ChannelConfig(
+                    enabled=True, config={"number": get_settings().demo_whatsapp_number}
+                )
+            }
+            if slug == "demo-hvac" and get_settings().demo_whatsapp_number
+            else {}
+        ),
         "email": ChannelConfig(
             enabled=True,
             config={

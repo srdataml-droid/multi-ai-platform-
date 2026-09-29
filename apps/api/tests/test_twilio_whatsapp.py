@@ -28,7 +28,7 @@ from novaxis_db.session import service_session, tenant_session
 
 TOKEN = "twilio-test-token"
 HVAC_SMS = "+15005550006"
-SANDBOX = "+14155238886"
+SANDBOX = "+14155550199"  # not the seeded demo sandbox number: one business per number
 
 
 @pytest.fixture

@@ -19,9 +19,11 @@ Two ways in, same assistant:
    number (e.g. `+14155238886`) and the join words (`join something-something`).
 2. In the sandbox settings, set **"When a message comes in"** to
    `https://novaxis-api.vercel.app/inbound/twilio/whatsapp` (HTTP POST).
-3. Novaxis (operator) sets the business's WhatsApp number to the sandbox number:
-   `channels.twilio_whatsapp = {"enabled": true, "config": {"number": "+14155238886"}}`.
-   One business at a time can use the sandbox number.
+3. The demo heating business already answers on the sandbox number
+   (`NOVAXIS_DEMO_WHATSAPP_NUMBER`, default `+14155238886`, set by the demo seed). For
+   another business, the operator sets `channels.twilio_whatsapp.config.number`. One
+   business at a time can use a number. No number of your own is needed to test: the
+   sandbox number is Twilio's, and any WhatsApp phone in any country can join it.
 4. From your phone, WhatsApp the join words to the sandbox number, then write as a
    customer would. The assistant answers on WhatsApp.
 

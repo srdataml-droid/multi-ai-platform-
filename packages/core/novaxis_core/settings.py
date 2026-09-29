@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     # Before a reply is sent, a small call checks its statements about the business against
     # the business facts; anything unsupported is held back and passed to staff (turn.py).
     reply_fact_check: bool = False
+    # The demo heating business answers WhatsApp on Twilio's shared sandbox number
+    # (docs/whatsapp.md). Empty: no demo business uses WhatsApp through Twilio.
+    demo_whatsapp_number: str = "+14155238886"
     # Billing. With no Stripe keys the provider is "demo": checkout activates the tenant
     # through the same event handler a real webhook uses, and no money moves.
     stripe_secret_key: str = ""
