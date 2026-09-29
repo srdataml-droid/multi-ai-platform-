@@ -51,5 +51,5 @@ are handled exactly like the trade's own sensitive questions (the dental symptom
 Ticking private on a question that already has answers encrypts those answers when the
 settings are saved. Unticking it later leaves stored answers encrypted (and hidden from
 viewers) but readable by staff. Standard questions copied with "Start from our standard
-questions" keep their private tick. The customer's own messages are stored as sent, as
-for every other channel.
+questions" keep their private tick. The customer's messages themselves are encrypted at
+rest too (docs/encryption.md).

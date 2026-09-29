@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # Fernet key (urlsafe base64, 32 bytes) for sensitive intake fields at rest. Empty means
     # "derive from the JWT secret", which is acceptable only when env == "local".
     sensitive_fields_key: str = ""
+    # A key you have saved yourself, to change to: it encrypts from now on, the current key
+    # still decrypts, and POST /internal/rekey moves stored data over (docs/encryption.md).
+    sensitive_fields_key_next: str = ""
     # Scheduling. Google OAuth app credentials; the redirect URI is
     # {public_base_url}/integrations/google/callback.
     google_client_id: str = ""

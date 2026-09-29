@@ -3,6 +3,8 @@
 - POST /internal/tick     run scheduled work (roll-ups, follow-ups, reminders). A timer calls it.
 - POST /internal/migrate  apply database migrations (alembic upgrade head).
 - POST /internal/seed     create or refresh the demo tenants.
+- POST /internal/rekey    move encrypted data to NOVAXIS_SENSITIVE_FIELDS_KEY_NEXT, a pass at
+                          a time; call until "remaining" is 0 (docs/encryption.md).
 
 With no secret configured these return 404, so a local or misconfigured deployment
 exposes nothing.
@@ -18,6 +20,7 @@ from fastapi import APIRouter, Header, HTTPException, status
 from novaxis_api.inline_worker import drain_for
 from novaxis_core.settings import get_settings
 from novaxis_db import migrate
+from novaxis_db.rekey import rekey
 from novaxis_db.seed import seed
 from novaxis_db.session import service_session
 
@@ -58,3 +61,16 @@ def internal_seed(authorization: str | None = Header(default=None)) -> dict[str,
     with service_session() as s:
         tenants = seed(s)
         return {"tenants": [t.slug for t in tenants]}
+
+
+@router.post("/rekey")
+def internal_rekey(
+    authorization: str | None = Header(default=None), budget: int = 2000
+) -> dict[str, Any]:
+    _check(authorization)
+    if not get_settings().sensitive_fields_key_next.strip():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "set NOVAXIS_SENSITIVE_FIELDS_KEY_NEXT and redeploy first"
+        )
+    with service_session() as s:
+        return rekey(s, budget=max(1, min(budget, 5000)))

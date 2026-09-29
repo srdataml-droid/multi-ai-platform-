@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from novaxis_core.channels import Media
 from novaxis_core.channels.whatsapp import MEDIA_PREFIX, download
 from novaxis_core.models import AuditLog, Job, Message, Tenant
+from novaxis_core.sensitive import decrypt, encrypt
 from novaxis_core.settings import get_settings
 from novaxis_core.storage import MediaRejectedError, check_media, get_store, media_key
 from novaxis_core.stt import Transcriber, TranscriptionError, build_stt
@@ -51,7 +52,7 @@ def text_of(msg: Message) -> str:
     for e in getattr(msg, "media", None) or []:
         if not e.get("audio"):
             continue
-        t = str(e.get("transcript") or "").strip()
+        t = decrypt(str(e.get("transcript") or "")).strip()
         parts.append(f"[Voice note]: {t}" if t else UNHEARD)
     return "\n".join(parts)
 
@@ -172,7 +173,7 @@ def _transcribe(entries: list[dict[str, Any]], stt: Transcriber | None) -> None:
         try:
             audio, ct = get_store().get(str(e["stored_key"]))
             t = stt.transcribe(audio, ct or str(e.get("content_type") or ""), _filename(e))
-            e["transcript"] = t.text
+            e["transcript"] = encrypt(t.text)  # what the customer said: encrypted at rest
             e["transcript_model"] = t.model
         except (TranscriptionError, httpx.HTTPError, OSError, ValueError) as exc:
             e["transcript_error"] = f"{type(exc).__name__}: {exc}"[:300]
@@ -209,7 +210,7 @@ def media_view(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "size": e.get("size"),
                 "url": store.url_for(str(key)) if key else None,
                 "error": e.get("error"),
-                "transcript": e.get("transcript"),
+                "transcript": decrypt(str(e["transcript"])) if e.get("transcript") else None,
                 "transcript_error": e.get("transcript_error") if e.get("audio") else None,
             }
         )

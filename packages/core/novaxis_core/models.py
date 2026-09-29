@@ -29,6 +29,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from novaxis_core.sensitive import EncryptedText
+
 # Allowed values live here as tuples so migrations, models and tests agree.
 TENANT_STATUSES = ("active", "paused", "trial", "closed")
 USER_ROLES = ("owner", "staff", "viewer", "operator")
@@ -167,7 +169,7 @@ class Conversation(Base):
     )
     channel: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="open")
-    summary: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(EncryptedText)  # encrypted at rest
     extracted: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
@@ -194,7 +196,7 @@ class Message(Base):
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     channel: Mapped[str] = mapped_column(String(40), nullable=False)
     author: Mapped[str] = mapped_column(String(20), nullable=False)
-    body: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(EncryptedText, nullable=False)  # encrypted at rest
     provider_ref: Mapped[str | None] = mapped_column(String(200))
     media: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
