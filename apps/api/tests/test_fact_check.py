@@ -87,7 +87,16 @@ def test_an_invented_fact_is_held_back_and_the_question_goes_to_staff(hvac: Tena
     llm = FakeLLM(
         script=[
             (INVENTED, []),
-            (json.dumps({"unsupported": ["All engineers are Gas Safe registered"]}), []),
+            (
+                json.dumps(
+                    {
+                        "statements": [
+                            {"text": "All engineers are Gas Safe registered", "supported": False}
+                        ]
+                    }
+                ),
+                [],
+            ),
         ]
     )
     with tenant_session(hvac.id) as s:
@@ -113,7 +122,8 @@ def test_a_fact_the_business_gave_is_sent(hvac: Tenant) -> None:
     hvac.settings = {**hvac.settings, "faqs": [faq]}
     conv_id = _ask(hvac, "Are your engineers Gas Safe registered?")
     reply = "Yes, we're Gas Safe registered, number 123456. Could I have your name?"
-    llm = FakeLLM(script=[(reply, []), (json.dumps({"unsupported": []}), [])])
+    verdict = {"statements": [{"text": "Gas Safe registered, number 123456", "supported": True}]}
+    llm = FakeLLM(script=[(reply, []), (json.dumps(verdict), [])])
     with tenant_session(hvac.id) as s:
         run_turn(s, hvac, HVAC, llm, conv_id)
     assert _sent(hvac, conv_id).endswith(reply)
@@ -143,3 +153,26 @@ def test_off_unless_switched_on(hvac: Tenant, monkeypatch: pytest.MonkeyPatch) -
     with tenant_session(hvac.id) as s:
         run_turn(s, hvac, HVAC, llm, conv_id)
     assert [c["task"] for c in llm.calls] == ["worker_turn"]
+
+
+def test_anything_not_marked_supported_is_held_back(hvac: Tenant) -> None:
+    """Only an explicit true passes: "supported": "maybe" or a missing flag holds it back."""
+    conv_id = _ask(hvac, "Have you done jobs on my street before? I am in SW1A.")
+    verdict = {
+        "statements": [
+            {"text": "We cover SW1", "supported": True},
+            {"text": "We have helped homes in SW1", "supported": "maybe"},
+        ]
+    }
+    llm = FakeLLM(
+        script=[
+            ("We cover SW1 and have helped homes there. Your name?", []),
+            (json.dumps(verdict), []),
+        ]
+    )
+    with tenant_session(hvac.id) as s:
+        run_turn(s, hvac, HVAC, llm, conv_id)
+    assert "helped" not in _sent(hvac, conv_id)
+    held = _staff_items(hvac, conv_id)
+    assert len(held) == 1 and "We have helped homes in SW1" in held[0].params["text"]
+    assert "We cover SW1" not in held[0].params["text"].split("Draft reply")[0]

@@ -286,14 +286,22 @@ def pick_offered_slot(
 
 
 FACT_CHECK_PROMPT = (
-    "You check one reply from a business's assistant before it is sent to a customer. List "
-    "every statement in the reply about the business itself (its staff, qualifications, "
-    "registrations, prices, fees, guarantees, policies, past work, areas it covers, times it "
-    "can come, or what will happen next) that the business facts below do not state. "
-    "Greetings, questions to the customer, repeating what the customer said, and saying the "
-    "team will be in touch are not statements about the business. Reply with one JSON object "
-    'and nothing else: {"unsupported": ["..."]}, with an empty list when every statement is '
-    "supported by the facts."
+    "You check one reply from a business's assistant before it is sent to a customer.\n"
+    "First list every statement the reply makes about the business itself: its staff, "
+    "qualifications, registrations, insurance, prices, fees, guarantees, policies, reviews, "
+    "how long it has traded, work it has done before, areas it covers, times it can come, "
+    "or what will happen next. Greetings, questions to the customer, repeating what the "
+    "customer said, and saying the team will be in touch are not statements about the "
+    "business.\n"
+    "Then mark each one supported only if the business facts below say it. Consistent with "
+    "the facts is not enough: covering an area does not mean having worked in a street "
+    "there; offering a service does not mean holding a registration for it.\n"
+    "Examples, with the facts 'Service area prefixes: SW1':\n"
+    "- 'We cover SW1.' supported\n"
+    "- 'We have done plenty of work in SW1.' not supported (past work is not in the facts)\n"
+    "Reply with one JSON object and nothing else: "
+    '{"statements": [{"text": "...", "supported": true}]}, with an empty list when the reply '
+    "makes no statement about the business."
 )
 
 
@@ -332,10 +340,16 @@ def fact_check(
         data = json.loads(result.text[start : end + 1]) if start >= 0 else None
     except json.JSONDecodeError:
         data = None
-    if not isinstance(data, dict) or not isinstance(data.get("unsupported"), list):
-        log.warning("fact check gave no verdict for conversation %s", conv.id)
-        return None
-    return [str(x).strip() for x in data["unsupported"] if isinstance(x, str) and x.strip()]
+    if isinstance(data, dict) and isinstance(data.get("statements"), list):
+        return [
+            str(st.get("text", "")).strip() or "a statement about the business"
+            for st in data["statements"]
+            if isinstance(st, dict) and st.get("supported") is not True
+        ]
+    if isinstance(data, dict) and isinstance(data.get("unsupported"), list):
+        return [str(x).strip() for x in data["unsupported"] if isinstance(x, str) and x.strip()]
+    log.warning("fact check gave no verdict for conversation %s", conv.id)
+    return None
 
 
 def _emergency_hit(pack: PackSpec, text: str) -> bool:
