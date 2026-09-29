@@ -170,7 +170,8 @@ def decide_one(
     # edit
     if body.params is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "edit requires params")
-    params = ground_params(session, p.kind, body.params)
+    conv = session.get(Conversation, p.conversation_id) if p.conversation_id else None
+    params = ground_params(session, p.kind, body.params, conv)
     d = decide(p.kind, params, _context_for(session, p))
     new = ActionProposal(
         tenant_id=p.tenant_id,

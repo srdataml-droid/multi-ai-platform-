@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
 import { post } from "@/lib/api";
-import { summarise } from "@/lib/proposals";
+import { changed, editable, label, summarise, withEdits } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
@@ -63,7 +63,7 @@ export default function ApprovalsPage() {
   const { data, error, refresh } = usePoll<{ items: Proposal[] }>("/approvals", 4000);
   const { data: learning } = usePoll<Learning>("/approvals/learning", 60000);
   const [busy, setBusy] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<Record<string, Record<string, string>>>({});
   const [err, setErr] = useState<string | null>(null);
   // Approved but could not be done: kept on screen so the person knows to follow up.
   const [failed, setFailed] = useState<Record<string, string>>({});
@@ -73,7 +73,7 @@ export default function ApprovalsPage() {
     setErr(null);
     try {
       const body: Record<string, unknown> = { decision };
-      if (decision === "edit") body.params = JSON.parse(editing[p.id] ?? JSON.stringify(p.params));
+      if (decision === "edit") body.params = withEdits(p.params, editing[p.id] ?? {});
       const r = await post<Record<string, unknown>>(`/approvals/${p.id}`, body);
       const done = (r.proposal ?? r) as { state?: string; error?: string | null };
       if (done.state === "failed") {
@@ -107,13 +107,22 @@ export default function ApprovalsPage() {
               <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words">{v}</dd></div>
             ))}
           </dl>
-          <details className="mb-3">
-            <summary className="cursor-pointer text-xs text-slate-500">Edit details before approving</summary>
-            <textarea data-testid={`params-${p.id}`} className="mt-2 w-full rounded border border-slate-300 p-2 font-mono text-xs" rows={4} value={editing[p.id] ?? JSON.stringify(p.params, null, 2)} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: e.target.value }))} />
-          </details>
+          {editable(p.params).length > 0 && (
+            <details className="mb-3">
+              <summary className="cursor-pointer text-xs text-slate-500">Change details before approving</summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {editable(p.params).map((k) => (
+                  <label key={k} className="text-sm">
+                    <span className="text-slate-500">{label(k)}</span>
+                    <input data-testid={`edit-${p.id}-${k}`} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={editing[p.id]?.[k] ?? String(p.params[k] ?? "")} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: { ...s[p.id], [k]: e.target.value } }))} />
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => decide(p, "approve")} disabled={busy === p.id}>Approve</Button>
-            <Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !editing[p.id]}>Approve with edits</Button>
+            <Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !changed(p.params, editing[p.id])}>Approve with changes</Button>
             <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Reject</Button>
           </div>
         </Card>

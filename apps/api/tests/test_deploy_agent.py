@@ -14,7 +14,7 @@ SCRIPT = ROOT / "deploy" / "aws" / "setup-agent.sh"
 
 
 def test_the_setup_script_pins_the_agent_as_it_is_now() -> None:
-    m = re.search(r"^AGENT_SHA256=([0-9a-f]{64})$", SCRIPT.read_text(), re.MULTILINE)
+    m = re.search(r"^AGENT_SHA256=\$\{AGENT_SHA256:-([0-9a-f]{64})\}$", SCRIPT.read_text(), re.M)
     assert m, "AGENT_SHA256 line missing"
     now = hashlib.sha256((ROOT / "examples" / "hermes_agent.py").read_bytes()).hexdigest()
     assert m.group(1) == now, f"examples/hermes_agent.py changed: set AGENT_SHA256={now}"

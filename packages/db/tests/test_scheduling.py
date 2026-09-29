@@ -476,3 +476,54 @@ def test_reschedule_offers_choices_and_moves_the_booking_the_customer_picks(
             )
         ]
         assert any(b.startswith("Moved: Check-up is now") for b in bodies)
+
+
+@pytest.mark.parametrize(
+    "model_calls",
+    [
+        [ToolCall("confirm_appointment", {"appointment_id": "2"}, "t")],  # the number, not the id
+        [],  # no tool call at all
+    ],
+    ids=["model-passes-the-option-number", "model-calls-no-tool"],
+)
+def test_a_bare_number_picks_that_offered_slot(
+    dental: Tenant, cal: FakeCalendar, model_calls: list[ToolCall]
+) -> None:
+    """Live on gpt-oss:120b the customer replied "1" and the model proposed
+    confirm_appointment with appointment_id "1", which no approval could carry out."""
+    conv_id, _ = _conv(dental, "A check-up next week please")
+    with tenant_session(dental.id) as s:
+        p = ActionProposal(
+            tenant_id=dental.id,
+            conversation_id=conv_id,
+            kind="propose_appointment",
+            params={"service_code": "checkup", "preferred_window": "next week", "notes": ""},
+            risk="low",
+            state="auto_approved",
+        )
+        s.add(p)
+        s.flush()
+        assert execute(s, dental, p).ok
+        chosen = scheduling.offered_for(s, s.get(Conversation, conv_id))[1].id  # type: ignore[arg-type]
+        s.add(
+            Message(
+                tenant_id=dental.id,
+                conversation_id=conv_id,
+                direction="inbound",
+                channel="webchat",
+                author="customer",
+                body="2",
+            )
+        )
+    with tenant_session(dental.id) as s:
+        run_turn(s, dental, get_pack("dental"), FakeLLM(script=[("Lovely.", model_calls)]), conv_id)
+        confirms = list(
+            s.scalars(
+                select(ActionProposal).where(
+                    ActionProposal.conversation_id == conv_id,
+                    ActionProposal.kind == "confirm_appointment",
+                )
+            )
+        )
+        assert [c.params["appointment_id"] for c in confirms] == [str(chosen)], "one, slot 2"
+        assert confirms[0].state != "rejected"

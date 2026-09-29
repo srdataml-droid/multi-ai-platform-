@@ -1,7 +1,8 @@
 # Your own agent on an AWS server
 
-Your agent (`examples/hermes_agent.py`) runs on your EC2 server as a service that starts on
-boot and restarts itself. It checks Novaxis every 10 seconds for customers waiting on a
+Your agent (`examples/hermes_agent.py`) runs on your EC2 server and keeps running: a systemd
+service where the machine uses systemd (a normal EC2 server), otherwise a small runner that
+restarts it and starts it again after a reboot. It checks Novaxis every 10 seconds for customers waiting on a
 reply, asks the model what to do, and sends back *proposals*. The platform's rules decide
 what happens, exactly as for the built-in assistant: emergencies go to on-call first,
 bookings wait for staff approval, anything risky is refused.
@@ -35,8 +36,15 @@ curl -fsSL https://raw.githubusercontent.com/srdataml-droid/multi-ai-platform-/m
 sudo bash setup-agent.sh
 ```
 
-It asks for the agent key, the Ollama key and the model (press Enter for `gpt-oss:120b`).
-It checks both keys work before starting, then ends with **"Done. The agent is running"**.
+Its first line says where it is installing (`Installing on <machine> (<system>, process 1:
+…)`). If that is not your server (for example your laptop, a container or a browser shell),
+stop and open the server session first: the agent stops whenever that machine does.
+
+It asks for each setting, showing a suggestion in brackets (Enter accepts it): the Novaxis
+API address, the agent key, the model service address and its key, the model, and how often
+to check. Nothing is fixed in the script; any setting can also be given in the environment,
+e.g. `sudo HERMES_MODEL=llama3.3 bash setup-agent.sh`. It checks both keys work, then ends
+with **"Done. The agent is running"**, or with the log lines that say why not.
 
 ## Switch the business over
 
@@ -46,19 +54,25 @@ stays quiet for that business and your agent replies.
 
 **Try it:** open
 [novaxis-web.vercel.app/widget-demo.html?business=demo-restoration](https://novaxis-web.vercel.app/widget-demo.html?business=demo-restoration)
-and write *"Water is coming through my kitchen ceiling from the flat upstairs."* A reply
-arrives within about 15 seconds (up to 10 s waiting for the next check, then the model).
-Give the details it asks for; the booking request appears in Approvals.
+and write *"There's a mouldy damp patch spreading on my bedroom wall, can someone look at
+it?"* A reply arrives within about 15 seconds (up to 10 s waiting for the next check, then
+the model). Give the details it asks for; the booking request appears in Approvals.
+
+Do not test with a leak or flooding: emergencies skip the agent on purpose and go straight
+to the on-call contact (on the demo businesses that contact is a made-up number, so the
+alert fails and the conversation waits for staff).
 
 ## Day to day (on the server)
 
-| To | Run |
-|---|---|
-| Watch what it does | `sudo journalctl -u novaxis-agent -f` |
-| Stop it | `sudo systemctl stop novaxis-agent` |
-| Start it again | `sudo systemctl start novaxis-agent` |
-| Change the keys or model | `sudo bash setup-agent.sh --keys` |
-| Update to the latest agent | download `setup-agent.sh` again and run it |
+The script's last lines print the exact commands for your machine. For reference:
+
+| To | With systemd (EC2 server) | Without systemd |
+|---|---|---|
+| Watch what it does | `sudo journalctl -u novaxis-agent -f` | `sudo tail -f /var/log/novaxis-agent.log` |
+| Stop it | `sudo systemctl stop novaxis-agent` | `sudo sh /opt/novaxis-agent/stop.sh` |
+| Start it again | `sudo systemctl start novaxis-agent` | `sudo sh /opt/novaxis-agent/start.sh` |
+| Change keys, addresses or model | `sudo bash setup-agent.sh --config` | same |
+| Update to the latest agent | download `setup-agent.sh` again and run it | same |
 
 **If the agent is stopped, that business's customers get no replies** (emergencies still
 alert on-call). Switch the business back to *the built-in assistant* in Settings whenever
@@ -69,10 +83,10 @@ you stop the agent for more than a few minutes.
 - The keys are kept in `/etc/novaxis-agent.env`, readable by root only. The agent runs as
   its own user with no login and a read-only view of the system.
 - The script only installs the agent if the download matches the hash written in it; the
-  test suite keeps the two in step.
-- **If you make the GitHub repo private,** the download needs a token. Run the install
-  before making it private, or ask for a version of the script that carries the agent
-  inside it.
+  test suite keeps the two in step. To run your own changed agent instead:
+  `sudo AGENT_FILE=/path/to/agent.py bash setup-agent.sh`.
+- **If you make the GitHub repo private,** the download fails; copy the agent file to the
+  server and use `AGENT_FILE` as above.
 - Replying from your own server takes a little longer than the built-in assistant, because
   of the 10-second check. Webhooks remove that wait but need an HTTPS address for the
   server (docs/agent-api.md); not worth it for the pilot.

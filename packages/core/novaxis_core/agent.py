@@ -345,6 +345,11 @@ def agent_propose(
         if disclosure and _first_reply(session, conv) and not text.startswith(disclosure):
             params = {**params, "text": f"{disclosure}\n\n{params['text']}"}
 
+    if kind == "reply":
+        # As turn.py: "2" in answer to an offer confirms slot 2, whatever the agent does.
+        from novaxis_core.turn import pick_offered_slot
+
+        pick_offered_slot(session, tenant, conv, ctx)
     p, _ = propose(session, tenant, conv, kind, params, ctx, origin)
 
     if kind == "reply" and p.state == "rejected":

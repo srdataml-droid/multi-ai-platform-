@@ -48,7 +48,7 @@ from novaxis_core.models import (
 )
 from novaxis_core.notify import enqueue_staff_notification
 from novaxis_core.packspec import PackSpec
-from novaxis_core.scheduling import appointments_block
+from novaxis_core.scheduling import appointments_block, offered_for
 from novaxis_core.sensitive import decrypt_fields
 from novaxis_core.settings import get_settings
 from novaxis_core.workflows import schedule_idle_steps
@@ -168,7 +168,18 @@ def record_usage(
     )
 
 
-def ground_params(session: Session, kind: str, params: dict[str, Any]) -> dict[str, Any]:
+def _slot_number(value: Any, held: list[Any]) -> Any:
+    """The offered slot a bare choice like "2", "2." or "#2" names, else None. Offers are
+    numbered for the customer (scheduling.offer_text)."""
+    s = str(value).strip().lstrip("#").rstrip(".)").strip()
+    if s.isdigit() and 1 <= int(s) <= len(held):
+        return held[int(s) - 1]
+    return None
+
+
+def ground_params(
+    session: Session, kind: str, params: dict[str, Any], conv: Conversation | None = None
+) -> dict[str, Any]:
     """Replace facts the model asserts with facts the database holds, before the gate sees
     them. The gate is a pure function and cannot look anything up (ADR 0007), so a model's
     word must never decide a risk the rows can settle."""
@@ -179,6 +190,12 @@ def ground_params(session: Session, kind: str, params: dict[str, Any]) -> dict[s
             appt = session.get(Appointment, uuid.UUID(str(params.get("appointment_id", ""))))
         except ValueError:
             appt = None
+        if appt is None and conv is not None:
+            # Live, gpt-oss passed the option number the customer typed ("1") instead of
+            # the slot's id; the offer this conversation holds says which slot that is.
+            appt = _slot_number(params.get("appointment_id", ""), offered_for(session, conv))
+            if appt is not None:
+                params = {**params, "appointment_id": str(appt.id)}
         if appt is not None:
             return {**params, "service_code": appt.service_code}
         return {**params, "service_code": ""}  # unknown appointment: no auto-confirm
@@ -195,7 +212,7 @@ def propose(
     origin: str,
 ) -> tuple[ActionProposal, Decision]:
     """Store one proposal with the gate's decision and act on it."""
-    params = ground_params(session, kind, params)
+    params = ground_params(session, kind, params, conv)
     d = decide(kind, params, ctx)
     p = ActionProposal(
         tenant_id=tenant.id,
@@ -218,6 +235,45 @@ def propose(
             session, tenant.id, "proposal.rejected", proposal_id=p.id, kind=kind, reason=d.reason
         )
     return p, d
+
+
+def pick_offered_slot(
+    session: Session, tenant: Tenant, conv: Conversation, ctx: GateContext
+) -> ActionProposal | None:
+    """A customer who answers an offer with just its number ("2") has picked that slot:
+    the confirmation is proposed even when the model does not propose it (open models
+    rarely call tools). Once per customer message."""
+    last = session.scalar(
+        select(Message)
+        .where(Message.conversation_id == conv.id, Message.direction == "inbound")
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    if last is None:
+        return None
+    picked = _slot_number(text_of(last), offered_for(session, conv))
+    if picked is None:
+        return None
+    already = session.scalar(
+        select(ActionProposal.id).where(
+            ActionProposal.conversation_id == conv.id,
+            ActionProposal.kind == "confirm_appointment",
+            ActionProposal.created_at >= last.created_at,
+            ActionProposal.params["appointment_id"].astext == str(picked.id),
+        )
+    )
+    if already is not None:
+        return None
+    p, _ = propose(
+        session,
+        tenant,
+        conv,
+        "confirm_appointment",
+        {"appointment_id": str(picked.id)},
+        ctx,
+        "customer picked an offered time",
+    )
+    return p
 
 
 def _emergency_hit(pack: PackSpec, text: str) -> bool:
@@ -434,6 +490,11 @@ def run_turn(
             decisions[call.name] = d.state
             if d.state == "rejected":
                 followup_needed = True
+        picked = pick_offered_slot(session, tenant, conv, ctx)
+        if picked is not None:
+            result_ids.append(picked.id)
+            decisions["confirm_appointment"] = picked.state
+            tool_calls = [*tool_calls, ToolCall("confirm_appointment", picked.params, "engine")]
         session.refresh(conv)
         plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
         st = intake_status(pack.intake, plain) if pack.intake else None
