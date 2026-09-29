@@ -1,7 +1,8 @@
 """Sensitive intake fields at rest.
 
-A pack marks intake questions `sensitive: true` (dental symptoms, pain, funding).
-Those values are encrypted before they reach `conversations.extracted`, decrypted
+A pack marks intake questions `sensitive: true` (dental symptoms, pain, funding), and a
+business can mark its own booking-type questions Private (booking_types.sensitive_keys_for
+joins the two). Those values are encrypted before they reach `conversations.extracted`, decrypted
 only inside a worker turn or for a staff-level read, excluded from logs and
 analytics, and shown to a `viewer` as a placeholder.
 
@@ -69,19 +70,23 @@ def encrypt_fields(fields: dict[str, str], sensitive_keys: frozenset[str]) -> di
 
 
 def decrypt_fields(fields: dict[str, Any], sensitive_keys: frozenset[str]) -> dict[str, Any]:
-    return {
-        k: (decrypt(v) if k in sensitive_keys and isinstance(v, str) else v)
-        for k, v in fields.items()
-    }
+    # By the value, not the list: an answer stays readable after its question stops being
+    # marked private (it was encrypted when it was stored).
+    del sensitive_keys
+    return {k: (decrypt(v) if isinstance(v, str) else v) for k, v in fields.items()}
+
+
+def _private(k: str, v: Any, sensitive_keys: frozenset[str]) -> bool:
+    return k in sensitive_keys or is_encrypted(v)
 
 
 def reveal(fields: dict[str, Any], sensitive_keys: frozenset[str], role: str) -> dict[str, Any]:
     """What a given role may see. Staff-level roles get plaintext; anyone else a placeholder."""
     if role in READ_ROLES:
         return decrypt_fields(fields, sensitive_keys)
-    return {k: (REDACTED if k in sensitive_keys else v) for k, v in fields.items()}
+    return {k: (REDACTED if _private(k, v, sensitive_keys) else v) for k, v in fields.items()}
 
 
 def strip_for_analytics(fields: dict[str, Any], sensitive_keys: frozenset[str]) -> dict[str, Any]:
     """Roll-ups never carry sensitive values, only whether they were provided."""
-    return {k: (bool(v) if k in sensitive_keys else v) for k, v in fields.items()}
+    return {k: (bool(v) if _private(k, v, sensitive_keys) else v) for k, v in fields.items()}

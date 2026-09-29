@@ -232,3 +232,100 @@ def test_owners_save_types_in_settings(migrated: str) -> None:
     assert r.status_code == 422 and "not a service" in r.text
     settings["booking_types"] = []
     assert c.put("/settings", json={"settings": settings}, headers=h).status_code == 200
+
+
+PRIVATE = {
+    "name": "New patient check-up",
+    "who": "anyone",
+    "service_code": "checkup",
+    "questions": [
+        {"key": "name", "ask": "What's your name?"},
+        {
+            "key": "conditions",
+            "ask": "Any medical conditions we should know about?",
+            "sensitive": True,
+        },
+        {"key": "when", "ask": "When suits you?", "type": "window"},
+    ],
+}
+
+
+def _set_types(t: Tenant, types: list[dict[str, object]]) -> None:
+    with service_session() as s:
+        row = s.get(Tenant, t.id)
+        assert row is not None
+        row.settings = {**row.settings, "booking_types": types}
+    t.settings = {**t.settings, "booking_types": types}
+
+
+def _login(c: TestClient, email: str) -> dict[str, str]:
+    token = c.post("/auth/dev-login", json={"email": email}).json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_a_private_custom_answer_is_encrypted_and_only_staff_read_it(dental: Tenant) -> None:
+    from novaxis_core.agent import context
+
+    _set_types(dental, [PRIVATE])
+    conv_id, _ = _customer(dental, "I'm Ann, I have asthma, Monday morning please.")
+    llm = FakeLLM(
+        script=[
+            (json.dumps({"name": "Ann", "conditions": "asthma", "when": "Monday morning"}), []),
+            ("Thanks Ann.", []),
+        ]
+    )
+    from novaxis_core.turn import run_turn
+
+    with tenant_session(dental.id) as s:
+        run_turn(s, dental, DENTAL, llm, conv_id)
+        booked = s.scalar(
+            select(ActionProposal).where(
+                ActionProposal.conversation_id == conv_id,
+                ActionProposal.kind == "propose_appointment",
+            )
+        )
+        assert booked is not None, "the assistant read the encrypted answer as complete"
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        agent_view = context(s, dental, DENTAL, conv)["intake"]["answers"]
+    with service_session() as s:
+        raw = s.get(Conversation, conv_id)
+        assert raw is not None
+        assert raw.extracted["conditions"].startswith("enc:v1:"), "encrypted at rest"
+        assert raw.extracted["name"] == "Ann", "only the private answer"
+    assert agent_view["conditions"] == "(held by the business)"
+
+    c = TestClient(create_app())
+    owner = c.get(f"/conversations/{conv_id}", headers=_login(c, "owner@demo-dental.test")).json()
+    viewer = c.get(f"/conversations/{conv_id}", headers=_login(c, "viewer@demo-dental.test")).json()
+    assert owner["extracted"]["conditions"] == "asthma"
+    assert viewer["extracted"]["conditions"] == "[redacted]"
+    assert "conditions" in owner["sensitive_keys"]
+
+
+def test_ticking_private_later_encrypts_answers_already_given(dental: Tenant) -> None:
+    open_type = {**PRIVATE, "questions": [{**q, "sensitive": False} for q in PRIVATE["questions"]]}
+    _set_types(dental, [open_type])
+    conv_id, _ = _customer(dental, "hi")
+    with tenant_session(dental.id) as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        conv.extracted = {"name": "Bo", "conditions": "diabetes"}
+
+    c = TestClient(create_app())
+    h = _login(c, "owner@demo-dental.test")
+    settings = c.get("/settings", headers=h).json()["settings"]
+    settings["booking_types"] = [PRIVATE]
+    r = c.put("/settings", json={"settings": settings}, headers=h)
+    assert r.status_code == 200, r.text
+    with service_session() as s:
+        raw = s.get(Conversation, conv_id)
+        assert raw is not None and raw.extracted["conditions"].startswith("enc:v1:")
+
+    # Unticked again: the stored answer stays encrypted but staff can still read it.
+    settings["booking_types"] = [open_type]
+    assert c.put("/settings", json={"settings": settings}, headers=h).status_code == 200
+    got = c.get(f"/conversations/{conv_id}", headers=h).json()["extracted"]
+    assert got["conditions"] == "diabetes"
+    viewer = c.get(f"/conversations/{conv_id}", headers=_login(c, "viewer@demo-dental.test"))
+    assert viewer.json()["extracted"]["conditions"] == "[redacted]", "still encrypted: still hidden"

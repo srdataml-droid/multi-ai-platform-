@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.actions import ACTIONS, RISK_ORDER
-from novaxis_core.booking_types import starter_type
+from novaxis_core.booking_types import encrypt_existing, sensitive_keys_for, starter_type
 from novaxis_core.models import AuditLog, Location, Tenant, User
 from novaxis_core.pack_registry import resolve_pack
 from novaxis_core.routing import claim_error, keep_routing
@@ -113,9 +113,16 @@ def write_settings(
             # The SMS number and inbound address route other people's messages here; an
             # owner sets the number in onboarding, and the inbound address is fixed.
             saved = keep_routing(saved, t.settings)
+        pack = resolve_pack(t.pack_id)
+        was_private = sensitive_keys_for(t, pack)
         t.settings = saved
         save_or_409(session)
         changes["settings"] = True
+        # Answers already stored under a question just marked Private are encrypted now,
+        # not only the ones that arrive from here on.
+        newly = sensitive_keys_for(t, pack) - was_private
+        if newly:
+            changes["encrypted_existing"] = encrypt_existing(session, newly)
         # Slots are computed in the location's time zone; keep it in step with settings.
         for loc in session.scalars(select(Location)):
             loc.timezone = validated.timezone

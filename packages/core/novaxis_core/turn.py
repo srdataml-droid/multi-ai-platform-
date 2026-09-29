@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
 from novaxis_core.approval_model import record_prediction
-from novaxis_core.booking_types import TYPE_KEY, intake_for
+from novaxis_core.booking_types import TYPE_KEY, intake_for, sensitive_keys_for
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.intake import (
@@ -316,7 +316,7 @@ def _extract_intake(
     the reply model choosing to call extract_fields. Goes through the gate like any
     proposal; a failure here only means the reply model is on its own."""
     for _ in range(2):  # a second pass when this message picked the booking type
-        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
         questions = intake_for(session, tenant, pack, conv, plain).questions
         if not questions or intake_status(questions, plain).complete:
             return
@@ -476,7 +476,7 @@ def run_turn(
         system_volatile = tenant_facts(tenant)
         if conv.summary:
             system_volatile += f"\n\nSummary of the conversation so far:\n{conv.summary}"
-        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
         intake = intake_for(session, tenant, pack, conv, plain)
         if intake.type_name:
             system_volatile += f"\n\nThe customer is booking: {intake.type_name}."
@@ -511,7 +511,7 @@ def run_turn(
             decisions["confirm_appointment"] = picked.state
             tool_calls = [*tool_calls, ToolCall("confirm_appointment", picked.params, "engine")]
         session.refresh(conv)
-        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
         intake = intake_for(session, tenant, pack, conv, plain)
         st = intake_status(intake.questions, plain) if intake.questions else None
         area_value = plain.get(intake.area_from) if intake.area_from else None

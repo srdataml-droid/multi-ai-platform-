@@ -28,6 +28,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
+from novaxis_core.booking_types import sensitive_keys_for
 from novaxis_core.gate import GateContext
 from novaxis_core.media import text_of
 from novaxis_core.models import (
@@ -164,9 +165,8 @@ def _intake(
     from novaxis_core.booking_types import intake_for
     from novaxis_core.intake import status as intake_status
 
-    answers = {
-        k: ("(held by the business)" if k in pack.sensitive_keys else v) for k, v in plain.items()
-    }
+    private = sensitive_keys_for(tenant, pack)
+    answers = {k: ("(held by the business)" if k in private else v) for k, v in plain.items()}
     intake = intake_for(session, tenant, pack, conv, plain)
     if not intake.questions:
         return {
@@ -207,7 +207,7 @@ def context(session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation
             .limit(50)
         )
     )[::-1]
-    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
     appts = session.scalars(
         select(Appointment)
         .where(
@@ -434,7 +434,7 @@ def _service_area(
     from novaxis_core.turn import disclosure_for, propose
 
     session.refresh(conv)
-    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
     area_from = intake_for(session, tenant, pack, conv, plain).area_from
     value = plain.get(area_from) if area_from else None
     if not value or not out_of_area(str(value), tenant.settings.get("service_area") or []):
@@ -476,7 +476,7 @@ def _after_intake(
         session, conv, "hand_to_human"
     ):
         return
-    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    plain = decrypt_fields(conv.extracted, sensitive_keys_for(tenant, pack))
     intake = intake_for(session, tenant, pack, conv, plain)
     if not intake.questions or intake.action != "propose_appointment":
         return

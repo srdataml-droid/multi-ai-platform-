@@ -38,5 +38,18 @@ questions in one type that would store their answers under the same key.
 Code: `packages/core/novaxis_core/booking_types.py` (`intake_for`), settings model in
 `tenant_settings.py`, editor in `apps/web/components/BookingTypesCard.tsx`.
 
-Not yet: sensitive answers (medical details) are encrypted only under the trade's own
-question keys, so keep "Start from our standard questions" for those questions.
+## Private answers
+
+Tick **private** on a question for health, money or other personal details. Those answers
+are handled exactly like the trade's own sensitive questions (the dental symptoms, say):
+
+- encrypted before they are stored (`enc:v1:`, Fernet, key in the environment only);
+- shown to owners and staff, `[redacted]` to read-only viewers;
+- held back from your own agent ("(held by the business)") and from reports;
+- still read by the built-in assistant, so a booking completes as normal.
+
+Ticking private on a question that already has answers encrypts those answers when the
+settings are saved. Unticking it later leaves stored answers encrypted (and hidden from
+viewers) but readable by staff. Standard questions copied with "Start from our standard
+questions" keep their private tick. The customer's own messages are stored as sent, as
+for every other channel.

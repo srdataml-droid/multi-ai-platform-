@@ -93,6 +93,10 @@ class BookingQuestion(BaseModel):
     type: Literal["text", "choice", "phone", "email", "postcode", "yesno", "window"] = "text"
     choices: list[str] = Field(default_factory=list)
     required: bool = True
+    sensitive: bool = Field(
+        default=False,
+        description="Private (health, money): encrypted at rest, hidden from viewers and agents",
+    )
 
     @model_validator(mode="after")
     def _choices(self) -> BookingQuestion:

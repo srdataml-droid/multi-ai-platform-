@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.billing import trial_block_reason
+from novaxis_core.booking_types import sensitive_keys_for
 from novaxis_core.contacts import merge, possible_duplicates
 from novaxis_core.llm import build_llm
 from novaxis_core.models import (
@@ -106,7 +107,7 @@ def _conversation_rows(
     for c in convs:
         contact = contacts.get(c.contact_id)
         last = last_msgs.get(c.id)
-        fields = reveal(c.extracted, pack.sensitive_keys, role)
+        fields = reveal(c.extracted, sensitive_keys_for(tenant, pack), role)
         rows.append(
             {
                 "id": str(c.id),
@@ -441,7 +442,7 @@ def export_one(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "contact not found")
     tenant = session.get(Tenant, principal.tenant_id)
     assert tenant is not None
-    data = export_contact(session, c, get_pack(tenant.pack_id).sensitive_keys)
+    data = export_contact(session, c, sensitive_keys_for(tenant, get_pack(tenant.pack_id)))
     session.add(
         AuditLog(
             tenant_id=principal.tenant_id,

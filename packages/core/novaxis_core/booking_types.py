@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import Session
 
 from novaxis_core.models import Appointment, Conversation, Tenant
@@ -37,6 +38,39 @@ class Intake:
     window_from: str  # the answer that says when the customer wants the visit
     area_from: str | None  # the answer checked against the service area
     type_name: str | None  # the booking type chosen, when the business has types
+
+
+def sensitive_keys_for(tenant: Tenant, pack: PackSpec) -> frozenset[str]:
+    """The answers kept private for this business: its trade's sensitive questions and any
+    of its own booking-type questions marked Private. Every type counts, so a key is
+    private whichever type stored it."""
+    own = {
+        q["key"]
+        for t in tenant.settings.get("booking_types") or []
+        for q in t.get("questions", [])
+        if q.get("sensitive")
+    }
+    return pack.sensitive_keys | frozenset(own)
+
+
+def encrypt_existing(session: Session, keys: frozenset[str]) -> int:
+    """Encrypt answers already stored in plain text under keys that have just been marked
+    private (the caller's session is scoped to one business). Returns how many
+    conversations changed."""
+    from novaxis_core.sensitive import encrypt_fields, is_encrypted
+
+    if not keys:
+        return 0
+    changed = 0
+    for conv in session.scalars(
+        select(Conversation).where(Conversation.extracted.has_any(array(sorted(keys))))
+    ):
+        plain = {k: v for k, v in conv.extracted.items() if k in keys and not is_encrypted(v)}
+        if plain:
+            conv.extracted = {**conv.extracted, **encrypt_fields(plain, keys)}
+            changed += 1
+    session.flush()
+    return changed
 
 
 def is_existing_customer(session: Session, contact_id: uuid.UUID) -> bool:
@@ -131,6 +165,7 @@ def starter_type(pack: PackSpec, services: list[dict[str, Any]]) -> dict[str, An
                 "type": q.type,
                 "choices": list(q.choices),
                 "required": q.required,
+                "sensitive": q.sensitive,
             }
             for q in pack.intake
         ],

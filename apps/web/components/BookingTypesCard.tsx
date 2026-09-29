@@ -3,7 +3,7 @@
 import { Button, Card } from "@/components/ui";
 import { keyFor } from "@/lib/bookingTypes";
 
-export type Question = { key: string; ask: string; type: string; choices: string[]; required: boolean };
+export type Question = { key: string; ask: string; type: string; choices: string[]; required: boolean; sensitive?: boolean };
 export type BookingType = { name: string; who: "anyone" | "new" | "existing"; service_code: string; questions: Question[] };
 type Service = { code: string; name: string };
 
@@ -102,6 +102,7 @@ export function BookingTypesCard(props: {
                 <input aria-label="Options" placeholder="Options, comma separated" className="w-56 rounded border px-2 py-1" value={q.choices.join(", ")} onChange={(e) => setQ(i, qi, { choices: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
               )}
               <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={q.required} onChange={(e) => setQ(i, qi, { required: e.target.checked })} />needed</label>
+              <label className="flex items-center gap-1 text-xs" title="Health, money and other private details: encrypted, hidden from viewers and from your own agent"><input type="checkbox" data-testid={`private-${i}-${qi}`} checked={!!q.sensitive} onChange={(e) => setQ(i, qi, { sensitive: e.target.checked })} />private</label>
               <button className="text-xs text-slate-500" aria-label="Move up" onClick={() => move(i, qi, -1)}>↑</button>
               <button className="text-xs text-slate-500" aria-label="Move down" onClick={() => move(i, qi, 1)}>↓</button>
               <button className="text-xs text-red-600" onClick={() => setType(i, { questions: t.questions.filter((_, j) => j !== qi) })}>remove</button>
@@ -117,7 +118,8 @@ export function BookingTypesCard(props: {
         <Button tone="secondary" onClick={() => onChange([...types, blank()])}>Add a booking type</Button>
         {starter && <Button tone="secondary" onClick={() => onChange([...types, { ...starter, name: types.length ? `${starter.name} ${types.length + 1}` : starter.name }])}>Start from our standard questions</Button>}
       </div>
-      <p className="mt-2 text-xs text-slate-500">Not sure what to ask? Start from our standard questions and edit them, or ask Novaxis to set this up with you.</p>
+      <p className="mt-2 text-xs text-slate-500">Tick <b>private</b> for health, money or other personal details: those answers are encrypted, hidden from read-only staff and from your own agent, and never used in reports. Ticking it later also protects answers already given.</p>
+      <p className="mt-1 text-xs text-slate-500">Not sure what to ask? Start from our standard questions and edit them, or ask Novaxis to set this up with you.</p>
     </Card>
   );
 }

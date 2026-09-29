@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import alert_staff, needs_a_person
-from novaxis_core.booking_types import intake_for
+from novaxis_core.booking_types import intake_for, sensitive_keys_for
 from novaxis_core.channels import get_adapter
 from novaxis_core.executors import ExecResult, conversation_id_of, executor
 from novaxis_core.intake import valid_answer
@@ -24,7 +24,8 @@ def extract_fields(
     if conv is None:
         return ExecResult(False, {}, "conversation not found")
     pack = resolve_pack(tenant.pack_id)
-    current = decrypt_fields(conv.extracted, pack.sensitive_keys)
+    private = sensitive_keys_for(tenant, pack)
+    current = decrypt_fields(conv.extracted, private)
     questions = {q.key: q for q in intake_for(session, tenant, pack, conv, current).questions}
     fields: dict[str, str] = {}
     kept: list[str] = []
@@ -40,7 +41,7 @@ def extract_fields(
                 continue
         fields[key] = value
     merged = dict(conv.extracted)
-    merged.update(encrypt_fields(fields, pack.sensitive_keys))
+    merged.update(encrypt_fields(fields, private))
     conv.extracted = merged
     # Keys only: values may be sensitive and this result is audited.
     result = {"keys": ",".join(sorted(fields))}
