@@ -12,7 +12,9 @@ from sqlalchemy.exc import IntegrityError
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.actions import ACTIONS, RISK_ORDER
+from novaxis_core.booking_types import starter_type
 from novaxis_core.models import AuditLog, Location, Tenant, User
+from novaxis_core.pack_registry import resolve_pack
 from novaxis_core.routing import claim_error, keep_routing
 from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import TenantSettings
@@ -61,6 +63,11 @@ def read_settings(principal: CurrentPrincipal, session: TenantDb) -> dict[str, A
             k: {"default": a.default_risk, "floor": a.floor, "description": a.description}
             for k, a in ACTIONS.items()
         },
+        # The trade's standard questions as a booking type, for "Start from our standard
+        # questions" in Settings > Booking types.
+        "starter_booking_type": starter_type(
+            resolve_pack(t.pack_id), list(t.settings.get("services") or [])
+        ),
     }
 
 

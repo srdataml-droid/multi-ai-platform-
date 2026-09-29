@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
 from novaxis_core.approval_model import record_prediction
+from novaxis_core.booking_types import TYPE_KEY, intake_for
 from novaxis_core.executors import execute
 from novaxis_core.gate import Decision, GateContext, decide
 from novaxis_core.intake import (
@@ -286,16 +287,6 @@ def _emergency_hit(pack: PackSpec, text: str) -> bool:
     return bool(pack.emergency_check and pack.emergency_check(text))
 
 
-def _service_code(pack: PackSpec, extracted: dict[str, Any]) -> str:
-    ai = pack.after_intake
-    if ai.service_code_from:
-        value = str(extracted.get(ai.service_code_from, "")).strip().lower()
-        for k, v in ai.service_code_map.items():
-            if k.lower() == value:
-                return v
-    return ai.default_service_code
-
-
 def _has_proposal(session: Session, conv: Conversation, kind: str) -> bool:
     return (
         session.scalar(
@@ -324,9 +315,32 @@ def _extract_intake(
     intake (and the booking the engine proposes when it is complete) does not depend on
     the reply model choosing to call extract_fields. Goes through the gate like any
     proposal; a failure here only means the reply model is on its own."""
-    plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
-    if intake_status(pack.intake, plain).complete:
-        return
+    for _ in range(2):  # a second pass when this message picked the booking type
+        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        questions = intake_for(session, tenant, pack, conv, plain).questions
+        if not questions or intake_status(questions, plain).complete:
+            return
+        fields = _extract_once(session, tenant, llm, conv, history, last_inbound, questions, plain)
+        if not fields:
+            return
+        propose(
+            session, tenant, conv, "extract_fields", {"fields": fields}, ctx, "intake extraction"
+        )
+        session.refresh(conv)
+        if TYPE_KEY not in fields:
+            return
+
+
+def _extract_once(
+    session: Session,
+    tenant: Tenant,
+    llm: LLMClient,
+    conv: Conversation,
+    history: list[Message],
+    last_inbound: Message,
+    questions: list[Any],
+    plain: dict[str, Any],
+) -> dict[str, str]:
     asked = next(
         (
             m.body
@@ -340,7 +354,7 @@ def _extract_intake(
         result = llm.complete(
             task="classify",
             system_stable=EXTRACTION_PROMPT,
-            system_volatile=extraction_block(pack.intake),
+            system_volatile=extraction_block(questions),
             messages=[
                 {"role": "user", "content": f"{said}The customer said: {text_of(last_inbound)}"}
             ],
@@ -348,15 +362,10 @@ def _extract_intake(
         )
     except Exception:  # noqa: BLE001 - extraction is a helper; the turn must go on
         log.warning("intake extraction failed for conversation %s", conv.id, exc_info=True)
-        return
+        return {}
     record_usage(session, tenant, conv.id, "classify", result)
-    fields = parse_extraction(result.text, pack.intake)
-    fields = {k: v for k, v in fields.items() if plain.get(k) != v}
-    if fields:
-        propose(
-            session, tenant, conv, "extract_fields", {"fields": fields}, ctx, "intake extraction"
-        )
-        session.refresh(conv)
+    fields = parse_extraction(result.text, questions)
+    return {k: v for k, v in fields.items() if plain.get(k) != v}
 
 
 def run_turn(
@@ -462,14 +471,17 @@ def run_turn(
             alerted=alerted,
         )
     else:
-        if pack.intake and last_inbound and settings.intake_extraction:
+        if last_inbound and settings.intake_extraction:
             _extract_intake(session, tenant, pack, llm, conv, history, last_inbound, ctx)
         system_volatile = tenant_facts(tenant)
         if conv.summary:
             system_volatile += f"\n\nSummary of the conversation so far:\n{conv.summary}"
-        if pack.intake:
-            plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
-            system_volatile += "\n\n" + prompt_block(pack.intake, plain)
+        plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
+        intake = intake_for(session, tenant, pack, conv, plain)
+        if intake.type_name:
+            system_volatile += f"\n\nThe customer is booking: {intake.type_name}."
+        if intake.questions:
+            system_volatile += "\n\n" + prompt_block(intake.questions, plain)
         appts = appointments_block(session, tenant, conv)
         if appts:
             system_volatile += "\n\n" + appts
@@ -500,8 +512,9 @@ def run_turn(
             tool_calls = [*tool_calls, ToolCall("confirm_appointment", picked.params, "engine")]
         session.refresh(conv)
         plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
-        st = intake_status(pack.intake, plain) if pack.intake else None
-        area_value = plain.get(pack.service_area_field) if pack.service_area_field else None
+        intake = intake_for(session, tenant, pack, conv, plain)
+        st = intake_status(intake.questions, plain) if intake.questions else None
+        area_value = plain.get(intake.area_from) if intake.area_from else None
         if area_value and out_of_area(str(area_value), tenant.settings.get("service_area") or []):
             reply_text = pack.out_of_area_reply or reply_text
             if not _has_proposal(session, conv, "hand_to_human"):
@@ -519,15 +532,17 @@ def run_turn(
         elif (
             st is not None
             and st.complete
-            and pack.after_intake.action == "propose_appointment"
+            and intake.action == "propose_appointment"
             and "propose_appointment" not in {c.name for c in tool_calls}
             and not _has_proposal(session, conv, "propose_appointment")
         ):
             # The model finished intake but did not propose; the engine does it for it.
             params = {
-                "service_code": _service_code(pack, plain),
-                "preferred_window": str(plain.get(pack.after_intake.window_from, "")),
-                "notes": "proposed by intake engine",
+                "service_code": intake.service_code,
+                "preferred_window": str(plain.get(intake.window_from, "")),
+                "notes": f"{intake.type_name}: proposed by intake engine"
+                if intake.type_name
+                else "proposed by intake engine",
             }
             p, d = propose(
                 session, tenant, conv, "propose_appointment", params, ctx, "intake complete"

@@ -6,6 +6,7 @@ import { AlertsCard } from "@/components/AlertsCard";
 import { BookingBridgeCard } from "@/components/BookingBridge";
 import { AgentKeysCard } from "@/components/AgentKeysCard";
 import { NO_RULES, ProtectTimeCard, type BookingRules } from "@/components/ProtectTimeCard";
+import { BookingTypesCard, type BookingType } from "@/components/BookingTypesCard";
 import { api, post, put } from "@/lib/api";
 
 type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
@@ -91,6 +92,14 @@ export default function SettingsPage() {
           ))}</tbody></table>
         <Button tone="secondary" onClick={() => update({ services: [...st.services, { code: "new_service", name: "New service", duration_minutes: 60, auto_confirm: false }] })}>Add service</Button>
       </Card>
+      <BookingTypesCard
+        types={(st.booking_types as BookingType[] | undefined) ?? []}
+        services={st.services}
+        starter={(s as unknown as { starter_booking_type?: BookingType }).starter_booking_type ?? null}
+        question={(st.booking_type_question as string | undefined) ?? "What can we help you with?"}
+        onChange={(t) => update({ booking_types: t })}
+        onQuestion={(q) => update({ booking_type_question: q })}
+      />
       <Card title="Service area (postcode or ZIP prefixes, comma separated)">
         <input className="w-full rounded border border-slate-300 px-2 py-1 text-sm" value={st.service_area.join(", ")} onChange={(e) => update({ service_area: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
       </Card>

@@ -84,6 +84,46 @@ class BookingRules(BaseModel):
     protected: list[ProtectedTime] = Field(default_factory=list)
 
 
+class BookingQuestion(BaseModel):
+    """One thing a business asks before this kind of booking, in its own words."""
+
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(pattern=r"^[a-z][a-z0-9_]{0,39}$", description="Made from the question")
+    ask: str = Field(min_length=3, max_length=300)
+    type: Literal["text", "choice", "phone", "email", "postcode", "yesno", "window"] = "text"
+    choices: list[str] = Field(default_factory=list)
+    required: bool = True
+
+    @model_validator(mode="after")
+    def _choices(self) -> BookingQuestion:
+        if self.type == "choice" and len([c for c in self.choices if c.strip()]) < 2:
+            raise ValueError(f"'{self.ask}': a choice question needs at least two options")
+        if self.type != "choice" and self.choices:
+            raise ValueError(f"'{self.ask}': options are only for choice questions")
+        return self
+
+
+class BookingType(BaseModel):
+    """A kind of booking and who may make it: a new customer's first visit, an existing
+    customer's follow-up, a quote. Each asks its own questions and books its own service."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=2, max_length=60)
+    who: Literal["anyone", "new", "existing"] = "anyone"
+    service_code: str
+    questions: list[BookingQuestion] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def _keys(self) -> BookingType:
+        keys = [q.key for q in self.questions]
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        if dupes:
+            raise ValueError(f"'{self.name}': two questions share the key {dupes}")
+        if "booking_type" in keys:
+            raise ValueError(f"'{self.name}': the key 'booking_type' is kept for choosing the type")
+        return self
+
+
 class ChannelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
@@ -100,6 +140,16 @@ class TenantSettings(BaseModel):
     business_hours: dict[str, DayHours] = Field(default_factory=dict)
     booking_rules: BookingRules = Field(default_factory=BookingRules)
     services: list[Service] = Field(default_factory=list)
+    booking_types: list[BookingType] = Field(
+        default_factory=list,
+        description="Empty: every customer is asked the trade's standard questions",
+    )
+    booking_type_question: str = Field(
+        default="What can we help you with?",
+        min_length=3,
+        max_length=200,
+        description="Asked first when more than one booking type fits the customer",
+    )
     service_area: list[str] = Field(
         default_factory=list, description="Postcode or ZIP prefixes the business serves"
     )
@@ -135,6 +185,17 @@ class TenantSettings(BaseModel):
         description="Websites allowed to host the chat widget, e.g. https://www.example.co.uk. "
         "Empty means any site.",
     )
+
+    @model_validator(mode="after")
+    def _types_book_known_services(self) -> TenantSettings:
+        codes = {svc.code for svc in self.services}
+        for t in self.booking_types:
+            if t.service_code not in codes:
+                raise ValueError(f"booking type '{t.name}' books '{t.service_code}', not a service")
+        names = [t.name.strip().lower() for t in self.booking_types]
+        if len(names) != len(set(names)):
+            raise ValueError("two booking types share a name")
+        return self
 
     @field_validator("business_hours")
     @classmethod

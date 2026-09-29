@@ -156,24 +156,37 @@ def waiting(session: Session, limit: int = 50) -> list[dict[str, Any]]:
     return out
 
 
-def _intake(pack: PackSpec, plain: dict[str, Any]) -> dict[str, Any]:
-    """The intake answers so far (sensitive ones withheld) and the next question to ask."""
+def _intake(
+    session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation, plain: dict[str, Any]
+) -> dict[str, Any]:
+    """The intake answers so far (sensitive ones withheld), every question for this
+    customer's booking type, and the next one to ask."""
+    from novaxis_core.booking_types import intake_for
     from novaxis_core.intake import status as intake_status
 
     answers = {
         k: ("(held by the business)" if k in pack.sensitive_keys else v) for k, v in plain.items()
     }
-    if not pack.intake:
-        return {"answers": answers, "complete": True, "next_question": None, "questions": []}
-    st = intake_status(pack.intake, plain)
+    intake = intake_for(session, tenant, pack, conv, plain)
+    if not intake.questions:
+        return {
+            "answers": answers,
+            "complete": True,
+            "next_question": None,
+            "questions": [],
+            "booking_type": intake.type_name,
+        }
+    st = intake_status(intake.questions, plain)
     nxt = st.next_question
     return {
         "answers": answers,
         "complete": st.complete,
+        "booking_type": intake.type_name,
         # Every question, so an agent can pull several answers out of one message
         # (examples/hermes_agent.py does, before it replies).
         "questions": [
-            {"key": q.key, "ask": q.ask, "type": q.type, "choices": q.choices} for q in pack.intake
+            {"key": q.key, "ask": q.ask, "type": q.type, "choices": q.choices}
+            for q in intake.questions
         ],
         "next_question": {"key": nxt.key, "ask": nxt.ask, "type": nxt.type, "choices": nxt.choices}
         if nxt
@@ -232,7 +245,7 @@ def context(session: Session, tenant: Tenant, pack: PackSpec, conv: Conversation
             }
             for m in messages
         ],
-        "intake": _intake(pack, plain),
+        "intake": _intake(session, tenant, pack, conv, plain),
         "appointments": [
             {
                 "appointment_id": str(a.id),
@@ -415,13 +428,15 @@ def _service_area(
 ) -> None:
     """As turn.py: an address outside the area the business covers gets the trade's fixed
     decline and goes to a person, whatever the agent would have said next."""
+    from novaxis_core.booking_types import intake_for
     from novaxis_core.intake import out_of_area
     from novaxis_core.sensitive import decrypt_fields
     from novaxis_core.turn import disclosure_for, propose
 
     session.refresh(conv)
     plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
-    value = plain.get(pack.service_area_field) if pack.service_area_field else None
+    area_from = intake_for(session, tenant, pack, conv, plain).area_from
+    value = plain.get(area_from) if area_from else None
     if not value or not out_of_area(str(value), tenant.settings.get("service_area") or []):
         return
     already = session.scalar(
@@ -452,23 +467,27 @@ def _after_intake(
 ) -> None:
     """As turn.py: once every answer is in, the booking request goes to staff even if the
     agent's model never proposes it (open models rarely call tools)."""
+    from novaxis_core.booking_types import intake_for
     from novaxis_core.intake import status as intake_status
     from novaxis_core.sensitive import decrypt_fields
-    from novaxis_core.turn import _has_proposal, _service_code, propose
+    from novaxis_core.turn import _has_proposal, propose
 
-    if not pack.intake or pack.after_intake.action != "propose_appointment":
-        return
     if _has_proposal(session, conv, "propose_appointment") or _has_proposal(
         session, conv, "hand_to_human"
     ):
         return
     plain = decrypt_fields(conv.extracted, pack.sensitive_keys)
-    if not intake_status(pack.intake, plain).complete:
+    intake = intake_for(session, tenant, pack, conv, plain)
+    if not intake.questions or intake.action != "propose_appointment":
+        return
+    if not intake_status(intake.questions, plain).complete:
         return
     params = {
-        "service_code": _service_code(pack, plain),
-        "preferred_window": str(plain.get(pack.after_intake.window_from, "")),
-        "notes": "proposed by intake engine",
+        "service_code": intake.service_code,
+        "preferred_window": str(plain.get(intake.window_from, "")),
+        "notes": f"{intake.type_name}: proposed by intake engine"
+        if intake.type_name
+        else "proposed by intake engine",
     }
     propose(session, tenant, conv, "propose_appointment", params, ctx, "intake complete")
 
