@@ -128,6 +128,16 @@ class BookingType(BaseModel):
         return self
 
 
+class Faq(BaseModel):
+    """A question customers ask and the business's own answer. The assistant states facts
+    about the business only from these and the settings above; anything else goes to a
+    person (turn.fact_check)."""
+
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=3, max_length=200)
+    answer: str = Field(min_length=1, max_length=600)
+
+
 class ChannelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
@@ -144,6 +154,11 @@ class TenantSettings(BaseModel):
     business_hours: dict[str, DayHours] = Field(default_factory=dict)
     booking_rules: BookingRules = Field(default_factory=BookingRules)
     services: list[Service] = Field(default_factory=list)
+    faqs: list[Faq] = Field(
+        default_factory=list,
+        max_length=60,
+        description="What customers ask, answered by the business (Gas Safe number, fees...)",
+    )
     booking_types: list[BookingType] = Field(
         default_factory=list,
         description="Empty: every customer is asked the trade's standard questions",

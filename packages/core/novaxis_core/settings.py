@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     # Before each reply, record intake answers with a small JSON call (turn.py), so intake
     # and bookings work even with models that rarely call tools. On for open models.
     intake_extraction: bool = False
+    # Before a reply is sent, a small call checks its statements about the business against
+    # the business facts; anything unsupported is held back and passed to staff (turn.py).
+    reply_fact_check: bool = False
     # Billing. With no Stripe keys the provider is "demo": checkout activates the tenant
     # through the same event handler a real webhook uses, and no money moves.
     stripe_secret_key: str = ""

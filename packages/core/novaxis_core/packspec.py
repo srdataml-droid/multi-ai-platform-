@@ -105,6 +105,9 @@ class Manifest(BaseModel):
         "now, so please use the emergency numbers above rather than waiting for us."
     )
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
+    unconfirmed_reply: str = (
+        "I can't confirm that myself, so I've asked the team and they'll get back to you on it."
+    )
     handoff_notice: str = (
         "Thanks for your message. A member of the team will be in touch with you shortly."
     )
@@ -236,6 +239,9 @@ class PackSpec:
     emergency_check: EmergencyCheck | None = None
     rule: PackRule | None = None
     high_risk_followup: str = "A member of the team will follow up with you on that directly."
+    unconfirmed_reply: str = (
+        "I can't confirm that myself, so I've asked the team and they'll get back to you on it."
+    )
     handoff_notice: str = "Thanks for your message. A member of the team will be in touch shortly."
     service_area_field: str | None = None
     out_of_area_reply: str = ""

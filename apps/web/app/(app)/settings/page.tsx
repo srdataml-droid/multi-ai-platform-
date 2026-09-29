@@ -7,6 +7,7 @@ import { BookingBridgeCard } from "@/components/BookingBridge";
 import { AgentKeysCard } from "@/components/AgentKeysCard";
 import { NO_RULES, ProtectTimeCard, type BookingRules } from "@/components/ProtectTimeCard";
 import { BookingTypesCard, type BookingType } from "@/components/BookingTypesCard";
+import { FaqCard, type Faq } from "@/components/FaqCard";
 import { api, post, put } from "@/lib/api";
 
 type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
@@ -38,7 +39,9 @@ export default function SettingsPage() {
     setErr(null);
     setSaved(false);
     try {
-      const r = await put<Settings>("/settings", { settings: st, name: s.tenant.name, worker_enabled: s.tenant.worker_enabled });
+      // A question-and-answer row left empty is dropped rather than refused.
+      const faqs = ((st.faqs as { question: string; answer: string }[] | undefined) ?? []).filter((f) => f.question.trim() && f.answer.trim());
+      const r = await put<Settings>("/settings", { settings: { ...st, faqs }, name: s.tenant.name, worker_enabled: s.tenant.worker_enabled });
       setS(r);
       setSaved(true);
     } catch (e) {
@@ -92,6 +95,7 @@ export default function SettingsPage() {
           ))}</tbody></table>
         <Button tone="secondary" onClick={() => update({ services: [...st.services, { code: "new_service", name: "New service", duration_minutes: 60, auto_confirm: false }] })}>Add service</Button>
       </Card>
+      <FaqCard faqs={(st.faqs as Faq[] | undefined) ?? []} onChange={(f) => update({ faqs: f })} />
       <BookingTypesCard
         types={(st.booking_types as BookingType[] | undefined) ?? []}
         services={st.services}

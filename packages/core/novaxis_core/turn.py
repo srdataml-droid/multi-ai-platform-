@@ -13,6 +13,7 @@ reply is executed last so it can carry that line.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -110,6 +111,10 @@ def tenant_facts(tenant: Tenant) -> str:
     area = s.get("service_area") or []
     if area:
         lines.append("Service area prefixes: " + ", ".join(area))
+    faqs = s.get("faqs") or []
+    if faqs:
+        lines.append("Answers the business has given:")
+        lines += [f"- Q: {f['question']} A: {f['answer']}" for f in faqs]
     return "Business facts:\n" + "\n".join(lines)
 
 
@@ -278,6 +283,59 @@ def pick_offered_slot(
         "customer picked an offered time",
     )
     return p
+
+
+FACT_CHECK_PROMPT = (
+    "You check one reply from a business's assistant before it is sent to a customer. List "
+    "every statement in the reply about the business itself (its staff, qualifications, "
+    "registrations, prices, fees, guarantees, policies, past work, areas it covers, times it "
+    "can come, or what will happen next) that the business facts below do not state. "
+    "Greetings, questions to the customer, repeating what the customer said, and saying the "
+    "team will be in touch are not statements about the business. Reply with one JSON object "
+    'and nothing else: {"unsupported": ["..."]}, with an empty list when every statement is '
+    "supported by the facts."
+)
+
+
+def fact_check(
+    session: Session,
+    tenant: Tenant,
+    llm: LLMClient,
+    conv: Conversation,
+    facts: str,
+    customer_said: str,
+    reply: str,
+) -> list[str] | None:
+    """The reply's statements about the business that the facts do not support: [] when
+    every one is supported, None when the check could not run (the reply then goes as
+    written, and the failure is logged). Live, gpt-oss told a customer "all of our engineers
+    are Gas Safe registered" and "we've done plenty of work in the SW1 area" (2026-09-29)."""
+    try:
+        result = llm.complete(
+            task="classify",
+            system_stable=FACT_CHECK_PROMPT,
+            system_volatile=facts,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"The customer said: {customer_said}\n\nThe reply to check: {reply}",
+                }
+            ],
+            max_tokens=300,
+        )
+    except Exception:  # noqa: BLE001 - a helper; the turn must go on
+        log.warning("fact check failed for conversation %s", conv.id, exc_info=True)
+        return None
+    record_usage(session, tenant, conv.id, "classify", result)
+    start, end = result.text.find("{"), result.text.rfind("}")
+    try:
+        data = json.loads(result.text[start : end + 1]) if start >= 0 else None
+    except json.JSONDecodeError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("unsupported"), list):
+        log.warning("fact check gave no verdict for conversation %s", conv.id)
+        return None
+    return [str(x).strip() for x in data["unsupported"] if isinstance(x, str) and x.strip()]
 
 
 def _emergency_hit(pack: PackSpec, text: str) -> bool:
@@ -550,6 +608,44 @@ def run_turn(
             result_ids.append(p.id)
             decisions["propose_appointment"] = d.state
             tool_calls = [*tool_calls, ToolCall("propose_appointment", params, "engine")]
+        if settings.reply_fact_check and reply_text not in (pack.out_of_area_reply, FALLBACK_REPLY):
+            claims = fact_check(
+                session,
+                tenant,
+                llm,
+                conv,
+                system_volatile,
+                text_of(last_inbound) if last_inbound else "",
+                reply_text,
+            )
+            if claims:
+                # Never send a fact the business has not given: say so, keep intake going,
+                # and put the question in front of staff with what was held back.
+                nxt = st.next_question if st is not None and not st.complete else None
+                held = reply_text
+                reply_text = pack.unconfirmed_reply + (f" {nxt.ask}" if nxt else "")
+                p, d = propose(
+                    session,
+                    tenant,
+                    conv,
+                    "verify_claim",
+                    {
+                        "text": "The customer asked something the business facts do not "
+                        f"answer. Held back: {'; '.join(claims)}. Draft reply: {held}"
+                    },
+                    ctx,
+                    "reply stated facts the business has not given",
+                )
+                result_ids.append(p.id)
+                decisions["verify_claim"] = d.state
+                _audit(
+                    session,
+                    tenant.id,
+                    "turn.fact_check",
+                    conversation_id=conv.id,
+                    proposal_id=p.id,
+                    held=len(claims),
+                )
         if BOOKING_CLAIMS.search(reply_text) and not {c.name for c in tool_calls} & CLAIM_TOOLS:
             p, d = propose(
                 session,
