@@ -67,7 +67,7 @@ export function BookingBridgeCard({ onChange }: { onChange?: () => void }) {
       <ErrorLine error={err} />
       {note && <p className="mb-2 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
       <p className="mb-3 text-xs text-slate-500">
-        For diaries we cannot write to directly. Each approved booking becomes a hand-off with a reference the office keys in, and a daily diary export (CSV) keeps us from offering times that are already taken. If the export shows someone else in a time we booked, the diary wins and the customer is offered new times.
+        For diaries we cannot write to. Approved bookings become hand-offs for the office to key in; a daily diary export (CSV) stops double booking.
       </p>
       {b.connected && b.health && (
         <p className="mb-3 text-sm">
@@ -149,8 +149,8 @@ export function HandoffsCard() {
                 <span className="text-slate-600">{t.service_name} · {t.customer_name} {t.customer_phone}</span>
               </span>
               <span className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">{t.status === "emailed" ? "emailed to office" : t.status === "not_emailed" ? "not emailed" : "sending"}</span>
-                <button className="rounded bg-slate-900 px-2 py-1 text-xs text-white" onClick={() => entered(t.id)}>Entered</button>
+                <span className="text-xs text-slate-500">{t.status === "emailed" ? "emailed to office" : t.status === "not_emailed" ? "not emailed" : "sending"}</span>
+                <button className="rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-medium text-white" onClick={() => entered(t.id)}>Entered</button>
               </span>
             </li>
           ))}

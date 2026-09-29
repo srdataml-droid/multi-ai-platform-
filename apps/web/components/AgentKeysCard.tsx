@@ -70,7 +70,7 @@ export function AgentKeysCard({ assistant, onAssistant }: { assistant: string; o
         </select>
       </label>
       <p className="mt-1 text-xs text-slate-500">
-        With your own agent, the built-in assistant stops replying; the emergency check, the AI disclosure and your approval rules still apply to everything your agent proposes. Press Save all at the top.
+        Your agent replaces the built-in assistant. Emergency checks and your approval rules still apply.
       </p>
       {shown && (
         <div className="mt-3 rounded bg-amber-50 p-2 text-sm" data-testid="new-agent-key">

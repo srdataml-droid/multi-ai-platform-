@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorLine, PageTitle } from "@/components/ui";
 import { post } from "@/lib/api";
-import { changed, editable, label, summarise, withEdits } from "@/lib/proposals";
+import { changed, editable, kindLabel, label, summarise, withEdits } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
@@ -88,43 +88,48 @@ export default function ApprovalsPage() {
     }
   };
 
+  const items = data?.items ?? [];
   return (
     <div className="flex flex-col gap-4">
+      <PageTitle>Approvals{items.length > 0 && <span className="ml-2 text-base font-normal text-slate-600">{items.length}</span>}</PageTitle>
       <ErrorLine error={error ?? err} />
       {Object.entries(failed).map(([id, why]) => (
-        <p key={id} data-testid="approval-failed" className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p key={id} data-testid="approval-failed" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-inset ring-red-200">
           Approved, but it could not be done: {why}. The conversation is now with your team; open it from the inbox to follow up with the customer.
           <button className="ml-2 underline" onClick={() => setFailed((f) => { const n = { ...f }; delete n[id]; return n; })}>Dismiss</button>
         </p>
       ))}
-      {data && !data.items.length && <Card title="Approvals"><p className="text-sm text-slate-500">Nothing waiting for a decision.</p></Card>}
-      {(data?.items ?? []).map((p) => (
-        <Card key={p.id} title={p.kind.replace(/_/g, " ")} actions={<Badge tone={p.risk === "high" ? "red" : "amber"}>{p.risk}</Badge>}>
-          <p className="mb-2 text-xs text-slate-500">{p.reason} · {ago(p.created_at)} · {p.conversation_id && <Link className="text-blue-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link>}</p>
+      {data && !items.length && <Card><Empty>All clear. Nothing to decide.</Empty></Card>}
+      {items.map((p) => (
+        <Card key={p.id} title={kindLabel(p.kind)} actions={<Badge tone={p.risk === "high" ? "red" : p.risk === "low" ? "slate" : "amber"}>{p.risk} risk</Badge>}>
+          <p className="-mt-1 mb-3 text-xs text-slate-500">
+            {p.reason && <>{p.reason.replace(/: default$/, "")} · </>}{ago(p.created_at)}
+            {p.conversation_id && <> · <Link className="font-medium text-brand-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link></>}
+          </p>
           {p.prediction && <Guess g={p.prediction} />}
-          <dl className="mb-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm" data-testid={`summary-${p.id}`}>
+          <dl className="mb-3 grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-slate-50 p-3 text-sm" data-testid={`summary-${p.id}`}>
             {summarise(p.params).map(([k, v]) => (
-              <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words">{v}</dd></div>
+              <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words text-slate-900">{v}</dd></div>
             ))}
           </dl>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => decide(p, "approve")} disabled={busy === p.id}>Approve</Button>
+            <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Reject</Button>
+          </div>
           {editable(p.params).length > 0 && (
-            <details className="mb-3">
-              <summary className="cursor-pointer text-xs text-slate-500">Change details before approving</summary>
-              <div className="mt-2 flex flex-col gap-2">
+            <details className="mt-3 border-t border-slate-100 pt-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-600">Change details first</summary>
+              <div className="mt-3 flex flex-col gap-3">
                 {editable(p.params).map((k) => (
-                  <label key={k} className="text-sm">
+                  <label key={k} className="flex flex-col gap-1 text-sm">
                     <span className="text-slate-500">{label(k)}</span>
-                    <input data-testid={`edit-${p.id}-${k}`} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" value={editing[p.id]?.[k] ?? String(p.params[k] ?? "")} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: { ...s[p.id], [k]: e.target.value } }))} />
+                    <input data-testid={`edit-${p.id}-${k}`} value={editing[p.id]?.[k] ?? String(p.params[k] ?? "")} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: { ...s[p.id], [k]: e.target.value } }))} />
                   </label>
                 ))}
+                <div><Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !changed(p.params, editing[p.id])}>Approve with changes</Button></div>
               </div>
             </details>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => decide(p, "approve")} disabled={busy === p.id}>Approve</Button>
-            <Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !changed(p.params, editing[p.id])}>Approve with changes</Button>
-            <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Reject</Button>
-          </div>
         </Card>
       ))}
       {learning && <LearningCard l={learning} />}

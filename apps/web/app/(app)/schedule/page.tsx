@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { HandoffsCard } from "@/components/BookingBridge";
-import { Badge, Card, ErrorLine } from "@/components/ui";
+import { Badge, Card, Empty, ErrorLine, PageTitle } from "@/components/ui";
 import { post } from "@/lib/api";
-import { when } from "@/lib/format";
+import { clock, day } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
 
 type Risk = { score: number; level: "low" | "medium" | "high"; reasons: string[] };
@@ -31,47 +31,58 @@ export default function SchedulePage() {
 
   const byDay = new Map<string, Appt[]>();
   for (const a of data?.items ?? []) {
-    const day = new Date(a.starts_at).toDateString();
-    byDay.set(day, [...(byDay.get(day) ?? []), a]);
+    const d = day(a.starts_at);
+    byDay.set(d, [...(byDay.get(d) ?? []), a]);
   }
+  const today = day(new Date().toISOString());
+  const small = "rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ring-inset ring-slate-300 hover:bg-slate-50";
   return (
     <div className="flex flex-col gap-4">
+      <PageTitle>Schedule</PageTitle>
       <ErrorLine error={error ?? err} />
       <HandoffsCard />
-      {data && !data.items.length && <Card title="Schedule"><p className="text-sm text-slate-500">No appointments in the next 30 days.</p></Card>}
-      {[...byDay.entries()].map(([day, items]) => (
-        <Card key={day} title={day}>
-          <ul className="divide-y divide-slate-100 text-sm">
+      {data && !data.items.length && <Card><Empty>No bookings in the next 30 days.</Empty></Card>}
+      {[...byDay.entries()].map(([d, items]) => (
+        <Card key={d} title={<>{d === today ? "Today" : d}<span className="ml-2 font-normal text-slate-500">{items.length}</span></>}>
+          <ul className="-mx-1 flex flex-col gap-1">
             {items.map((a) => {
               const past = new Date(a.starts_at).getTime() <= now;
               return (
-                <li key={a.id} data-testid="appointment" className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span>
-                    {when(a.starts_at)} · {a.service_name} · {a.contact.display_name ?? "Unknown"}
-                    {a.customer_confirmed_at && <span className="ml-2 text-xs text-emerald-700">customer confirmed</span>}
-                    {!past && a.risk && (
-                      <span className="ml-2" title={a.risk.reasons.join("; ")} data-testid="no-show-risk">
-                        <Badge tone={riskTone[a.risk.level]}>no-show risk {Math.round(a.risk.score * 100)}%</Badge>
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {a.external_ref && <span className="text-xs text-slate-400">{a.external_ref.split(":")[0]}</span>}
-                    <Badge tone={a.status === "confirmed" ? "green" : a.status === "held" ? "amber" : "slate"}>{a.status}</Badge>
+                <li key={a.id} data-testid="appointment" className={`flex gap-3 rounded-xl px-1 py-2`}>
+                  <div className="w-14 shrink-0 pt-0.5 text-right">
+                    <div className="text-sm font-semibold tabular-nums text-slate-900">{clock(a.starts_at)}</div>
+                    <div className="text-xs tabular-nums text-slate-500">{clock(a.ends_at)}</div>
+                  </div>
+                  <div className={`w-1 shrink-0 rounded-full ${a.status === "confirmed" ? "bg-emerald-400" : a.status === "held" ? "bg-amber-400" : "bg-slate-300"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-sm font-medium text-slate-900">{a.service_name}</span>
+                      <Badge tone={a.status === "confirmed" ? "green" : a.status === "held" ? "amber" : "slate"}>{a.status}</Badge>
+                      {a.customer_confirmed_at && <Badge tone="green">customer confirmed</Badge>}
+                      {!past && a.risk && (
+                        <span title={a.risk.reasons.join("; ")} data-testid="no-show-risk">
+                          <Badge tone={riskTone[a.risk.level]}>no-show risk {Math.round(a.risk.score * 100)}%</Badge>
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-slate-500">
+                      <span className="truncate">{a.contact.display_name ?? "New visitor"}</span>
+                      {a.external_ref && <span className="text-xs text-slate-500">{a.external_ref.split(":")[0]}</span>}
+                      {a.conversation_id && <Link className="text-xs font-medium text-brand-700 hover:underline" href={`/conversations/${a.conversation_id}`}>conversation</Link>}
+                    </div>
                     {past && a.status === "confirmed" && (a.outcome ? (
-                      <span className="flex items-center gap-1 text-xs">
+                      <div className="mt-2 flex items-center gap-2 text-xs">
                         <Badge tone={a.outcome === "attended" ? "green" : "red"}>{a.outcome === "attended" ? "came" : "no-show"}</Badge>
                         <button className="text-slate-500 underline" onClick={() => record(a, null)}>undo</button>
-                      </span>
+                      </div>
                     ) : (
-                      <span className="flex items-center gap-1 text-xs" data-testid="record-outcome">
+                      <div className="mt-2 flex items-center gap-2 text-xs" data-testid="record-outcome">
                         <span className="text-slate-500">Did they come?</span>
-                        <button className="rounded border border-slate-300 px-2 py-0.5" onClick={() => record(a, "attended")}>Came</button>
-                        <button className="rounded border border-slate-300 px-2 py-0.5" onClick={() => record(a, "no_show")}>No-show</button>
-                      </span>
+                        <button className={small} onClick={() => record(a, "attended")}>Came</button>
+                        <button className={small} onClick={() => record(a, "no_show")}>No-show</button>
+                      </div>
                     ))}
-                    {a.conversation_id && <Link className="text-xs text-blue-700 hover:underline" href={`/conversations/${a.conversation_id}`}>conversation</Link>}
-                  </span>
+                  </div>
                 </li>
               );
             })}

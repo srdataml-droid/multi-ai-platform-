@@ -11,11 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from novaxis_api.auth import CurrentPrincipal, TenantDb
+from novaxis_api.routes_auth import sign_in_mode
 from novaxis_core.actions import ACTIONS, RISK_ORDER
 from novaxis_core.booking_types import encrypt_existing, sensitive_keys_for, starter_type
 from novaxis_core.models import AuditLog, Location, Tenant, User
 from novaxis_core.pack_registry import resolve_pack
 from novaxis_core.routing import claim_error, keep_routing
+from novaxis_core.security import hash_code, new_login_code
 from novaxis_core.settings import get_settings
 from novaxis_core.tenant_settings import TenantSettings
 
@@ -189,6 +191,11 @@ def add_staff(body: StaffIn, principal: CurrentPrincipal, session: TenantDb) -> 
         role=body.role,
         display_name=body.display_name,
     )
+    # Hosted without an identity provider, a member signs in with email and a code of
+    # their own, shown to the owner once to pass on (as a new business gets at sign-up).
+    code = new_login_code() if sign_in_mode() == "demo" else None
+    if code:
+        u.login_code_hash = hash_code(code)
     session.add(u)
     session.flush()
     session.add(
@@ -201,7 +208,31 @@ def add_staff(body: StaffIn, principal: CurrentPrincipal, session: TenantDb) -> 
             diff={"role": body.role},
         )
     )
-    return {"id": str(u.id), "email": u.email, "role": u.role}
+    return {"id": str(u.id), "email": u.email, "role": u.role, "login_code": code}
+
+
+@router.post("/staff/{user_id}/code")
+def new_code(user_id: uuid.UUID, principal: CurrentPrincipal, session: TenantDb) -> dict[str, Any]:
+    """A lost code: the owner issues a new one and the old one stops working."""
+    _require_owner(principal)
+    if sign_in_mode() != "demo":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "sign-in codes are not used here")
+    u = session.get(User, user_id)
+    if u is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user")
+    code = new_login_code()
+    u.login_code_hash = hash_code(code)
+    session.add(
+        AuditLog(
+            tenant_id=principal.tenant_id,
+            actor=f"user:{principal.user_id}",
+            event="staff.code_reset",
+            subject_table="users",
+            subject_id=u.id,
+            diff={},
+        )
+    )
+    return {"id": str(u.id), "login_code": code}
 
 
 class RoleIn(BaseModel):

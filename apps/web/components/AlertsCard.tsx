@@ -52,7 +52,7 @@ export function AlertsCard() {
       <ErrorLine error={err} />
       {note && <p className="mb-2 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
       <p className="mb-3 text-sm text-slate-600">
-        You are told when an approval is waiting, a customer is handed to your team, or a customer reports an emergency.
+        For approvals, hand-offs and emergencies.
       </p>
       <ul className="mb-3 space-y-1 text-sm">
         <li>Phone and computer alerts: <strong>{c.push_devices}</strong> device{c.push_devices === 1 ? "" : "s"}</li>
@@ -75,7 +75,7 @@ export function AlertsCard() {
           )}
         </div>
       )}
-      {!pushSupported() && <p className="mt-2 text-xs text-slate-500">This browser cannot receive alerts. On iPhone, open the dashboard in Safari, choose Share, then Add to Home Screen, and turn alerts on from there.</p>}
+      {!pushSupported() && <p className="mt-2 text-xs text-slate-500">This browser cannot receive alerts. On iPhone: Safari, Share, Add to Home Screen, then turn alerts on there.</p>}
     </Card>
   );
 }

@@ -12,6 +12,16 @@ export function when(iso: string | null | undefined, tz: string | undefined = bu
   return d.toLocaleString("en-GB", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz });
 }
 
+// "08:00" and "Monday 28 September", both in the business's time zone (a booking at 00:30
+// belongs to the business's day, whatever the viewer's clock says).
+export function clock(iso: string, tz: string | undefined = businessTimeZone): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz });
+}
+
+export function day(iso: string, tz: string | undefined = businessTimeZone): string {
+  return new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: tz });
+}
+
 export function ago(iso: string | null | undefined): string {
   if (!iso) return "";
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);

@@ -1,8 +1,11 @@
 {
-  "name": "Novaxis Worker",
+  "name": "Novaxis",
   "short_name": "Novaxis",
   "start_url": "/inbox",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f172a"
+  "background_color": "#f6f7fb",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

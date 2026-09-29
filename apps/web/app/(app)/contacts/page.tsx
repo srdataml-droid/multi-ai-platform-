@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Badge, Card, ErrorLine, Table, type Column } from "@/components/ui";
+import { useEffect, useState } from "react";
+import { Badge, Card, ErrorLine, PageTitle, Table, type Column } from "@/components/ui";
 import { api, post } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
@@ -13,10 +13,17 @@ export default function ContactsPage() {
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const { data, error, refresh } = usePoll<{ items: Row[] }>(`/contacts?q=${encodeURIComponent(q)}`, 10000);
+  // "Patients" at a dental practice, "Customers" elsewhere: the trade's own word.
+  const [noun, setNoun] = useState("Contacts");
+  useEffect(() => {
+    api<{ vocabulary: Record<string, string> }>("/pack")
+      .then((p) => p.vocabulary.customer && setNoun(p.vocabulary.customer.charAt(0).toUpperCase() + p.vocabulary.customer.slice(1) + "s"))
+      .catch(() => null);
+  }, []);
 
   // Never automatic: a chat visitor can type anyone's number, so a person confirms.
   const merge = async (r: Row, d: Dupe) => {
-    if (!confirm(`Merge "${r.display_name ?? "Unknown"}" into "${d.display_name}"? Their conversations and bookings move to ${d.display_name}.`)) return;
+    if (!confirm(`Merge "${r.display_name ?? "No name yet"}" into "${d.display_name}"? Their conversations and bookings move to ${d.display_name}.`)) return;
     setErr(null);
     try {
       await post(`/contacts/${r.id}/merge`, { into: d.id });
@@ -60,7 +67,7 @@ export default function ContactsPage() {
       label: "Name",
       render: (r) => (
         <span>
-          {r.display_name ?? "Unknown"}
+          {r.display_name ?? "No name yet"}
           {r.possible_duplicates.map((d) => (
             <span key={d.id} className="ml-2 inline-flex items-center gap-1 text-xs">
               <Badge tone="amber">same phone or email as {d.display_name}</Badge>
@@ -87,9 +94,12 @@ export default function ContactsPage() {
   ];
 
   return (
-    <Card title="Contacts" actions={<input className="rounded border border-slate-300 px-2 py-1 text-sm" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}>
+    <>
+      <PageTitle actions={<input type="search" aria-label="Search" className="w-44 sm:w-60" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}>{noun}</PageTitle>
       <ErrorLine error={error ?? err} />
-      <Table columns={columns} rows={data?.items ?? []} />
-    </Card>
+      <Card>
+        <Table columns={columns} rows={data?.items ?? []} empty="Nobody yet." />
+      </Card>
+    </>
   );
 }

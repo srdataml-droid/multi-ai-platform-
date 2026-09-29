@@ -124,7 +124,7 @@ export default function OnboardingPage() {
                 <span>to</span>
                 <input type="time" className="rounded border border-slate-300 px-2 py-1" value={h.close} onChange={(e) => patch({ business_hours: { ...w.business_hours, [k]: { ...h, close: e.target.value } } })} />
               </>
-            ) : <span className="text-slate-400">Closed</span>}
+            ) : <span className="text-slate-500">Closed</span>}
           </div>
         );
       })}
@@ -183,7 +183,7 @@ export default function OnboardingPage() {
       <ol className="flex flex-wrap gap-1 text-xs" data-testid="wizard-steps">
         {STEPS.map((s, i) => (
           <li key={s}>
-            <button onClick={() => setStep(i)} className={`rounded px-2 py-1 ${i === step ? "bg-slate-900 text-white" : i < step ? "bg-slate-200" : "bg-slate-100 text-slate-500"}`}>{i + 1}. {s}</button>
+            <button onClick={() => setStep(i)} className={`rounded-full px-3 py-1 ${i === step ? "bg-brand-600 text-white" : i < step ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500"}`}>{i + 1}. {s}</button>
           </li>
         ))}
       </ol>

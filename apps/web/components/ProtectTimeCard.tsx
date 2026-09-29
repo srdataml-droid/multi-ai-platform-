@@ -27,7 +27,7 @@ export function ProtectTimeCard({ rules, onChange }: { rules: BookingRules; onCh
   return (
     <Card title="Protect your time">
       <p className="mb-3 text-sm text-slate-600">
-        What should we protect you from? Being free on the calendar does not make a time right for a customer. The assistant only offers times these rules allow.
+        The assistant only offers times these rules allow.
       </p>
       <div className="grid gap-3 text-sm sm:grid-cols-3">
         <label>
@@ -45,7 +45,7 @@ export function ProtectTimeCard({ rules, onChange }: { rules: BookingRules; onCh
       </div>
 
       <p className="mb-2 mt-4 text-sm font-medium">Times nobody can book</p>
-      <p className="mb-2 text-xs text-slate-500">Lunch, school runs, the team meeting, time to prepare quotes: kept free even when the diary is empty.</p>
+      <p className="mb-2 text-xs text-slate-500">Lunch, school runs, meetings: kept free even when the diary is empty.</p>
       {rules.protected.map((p, i) => (
         <div key={i} className="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-200 p-2 text-sm" data-testid={`protected-${i}`}>
           <input aria-label="What it is" className="w-36 rounded border px-1" value={p.label} onChange={(e) => setBlock(i, { label: e.target.value })} />

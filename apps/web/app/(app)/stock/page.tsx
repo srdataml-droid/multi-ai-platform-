@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { Badge, Button, Card, ErrorLine, PageTitle } from "@/components/ui";
 import { api, post } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
@@ -63,6 +63,7 @@ export default function StockPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <PageTitle>Stock</PageTitle>
       <ErrorLine error={error ?? err} />
       <Card title="Count stock from a photo">
         <div className="grid gap-3 sm:grid-cols-2">

@@ -63,7 +63,7 @@ export function BookingTypesCard(props: {
   return (
     <Card title="Booking types">
       <p className="mb-2 text-sm text-slate-600">
-        Different customers, different questions. A new customer&apos;s first visit, an existing customer&apos;s follow-up and a quote can each ask their own questions and book their own service. With none set, customers get our standard questions for your trade.
+        Different customers, different questions. None set: everyone gets the standard questions for your trade.
       </p>
       {types.length > 1 && (
         <label className="mb-3 block text-sm">
@@ -109,7 +109,7 @@ export function BookingTypesCard(props: {
             </div>
           ))}
           <div className="mt-2 flex gap-3">
-            <button className="text-xs text-blue-700" onClick={() => setType(i, { questions: [...t.questions, { key: "", ask: "", type: "text", choices: [], required: true }] })}>Add a question</button>
+            <button className="text-xs font-medium text-brand-700" onClick={() => setType(i, { questions: [...t.questions, { key: "", ask: "", type: "text", choices: [], required: true }] })}>Add a question</button>
             <button className="text-xs text-red-600" onClick={() => onChange(types.filter((_, j) => j !== i))}>Remove this booking type</button>
           </div>
         </div>
@@ -118,8 +118,7 @@ export function BookingTypesCard(props: {
         <Button tone="secondary" onClick={() => onChange([...types, blank()])}>Add a booking type</Button>
         {starter && <Button tone="secondary" onClick={() => onChange([...types, { ...starter, name: types.length ? `${starter.name} ${types.length + 1}` : starter.name }])}>Start from our standard questions</Button>}
       </div>
-      <p className="mt-2 text-xs text-slate-500">Tick <b>private</b> for health, money or other personal details: those answers are encrypted, hidden from read-only staff and from your own agent, and never used in reports. Ticking it later also protects answers already given.</p>
-      <p className="mt-1 text-xs text-slate-500">Not sure what to ask? Start from our standard questions and edit them, or ask Novaxis to set this up with you.</p>
+      <p className="mt-3 text-xs text-slate-500"><b>Private</b>: encrypted and hidden from view-only staff and your own agent.</p>
     </Card>
   );
 }

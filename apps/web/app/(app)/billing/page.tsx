@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TENANT_CHANGED } from "@/components/Nav";
-import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { Badge, Button, Card, ErrorLine, PageTitle, Stat } from "@/components/ui";
 import { api, post } from "@/lib/api";
 import { pounds } from "@/lib/money";
 
@@ -52,11 +52,12 @@ export default function BillingPage() {
   const t = b.trial;
   return (
     <div className="flex max-w-4xl flex-col gap-4">
+      <PageTitle>Billing</PageTitle>
       <ErrorLine error={err} />
-      {note && <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
+      {note && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
       {b.provider === "demo" && (
-        <p className="rounded bg-blue-50 px-3 py-2 text-xs text-blue-800" data-testid="demo-billing">
-          Demo billing: choosing a plan activates it straight away and no money moves. Prices are placeholders until the pilot sets them.
+        <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-900 ring-1 ring-inset ring-brand-100" data-testid="demo-billing">
+          Demo billing: no money moves. Prices are placeholders.
         </p>
       )}
       <Card title="Your account">
@@ -70,7 +71,7 @@ export default function BillingPage() {
               <span>Trial: {t.replies_used} of {t.reply_cap} AI replies used</span>
               <span>{t.days_left !== null ? `${t.days_left} days left` : ""}</span>
             </div>
-            <div className="h-2 w-full rounded bg-slate-100"><div className="h-2 rounded bg-slate-900" style={{ width: `${Math.min(100, (100 * t.replies_used) / Math.max(1, t.reply_cap))}%` }} /></div>
+            <div className="h-2 w-full rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${Math.min(100, (100 * t.replies_used) / Math.max(1, t.reply_cap))}%` }} /></div>
             {t.blocked && <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">{BLOCKED[t.blocked] ?? t.blocked} Choose a plan below to switch it back on.</p>}
           </div>
         )}
@@ -78,10 +79,9 @@ export default function BillingPage() {
         {b.status === "closed" && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-800">This account is closed. Contact Novaxis to reopen it.</p>}
       </Card>
       <Card title="This month">
-        <div className="grid gap-4 text-sm sm:grid-cols-3">
-          <div><div className="text-2xl font-semibold">{b.period.ai_replies}</div><div className="text-xs text-slate-500">AI replies{b.period.included !== null ? ` of ${b.period.included} included` : ""}</div></div>
-          <div><div className="text-2xl font-semibold">{b.period.overage_replies}</div><div className="text-xs text-slate-500">over the allowance ({pounds(b.period.overage_pence)} so far)</div></div>
-          <div><div className="text-2xl font-semibold">{b.period.tokens.toLocaleString("en-GB")}</div><div className="text-xs text-slate-500">model tokens (for information, not billed)</div></div>
+        <div className="grid grid-cols-2 gap-4">
+          <Stat value={b.period.ai_replies} label={`AI replies${b.period.included !== null ? ` of ${b.period.included}` : ""}`} />
+          <Stat value={b.period.overage_replies} label={`over allowance · ${pounds(b.period.overage_pence)}`} />
         </div>
       </Card>
       {b.status !== "closed" && (
@@ -89,7 +89,7 @@ export default function BillingPage() {
           {b.plans.map((p) => (
             <Card key={p.id} title={p.name} actions={b.plan === p.id && b.subscribed ? <Badge tone="green">Current</Badge> : <Button onClick={() => choose(p.id)}>Choose {p.name}</Button>}>
               <div className="text-sm">
-                <div className="text-2xl font-semibold">{pounds(p.monthly_pence)}<span className="text-sm font-normal text-slate-500"> / month per location</span></div>
+                <div className="text-2xl font-semibold tracking-tight">{pounds(p.monthly_pence)}<span className="text-sm font-normal text-slate-500"> / month</span></div>
                 <div className="mt-1 text-slate-600">{p.setup_pence ? `${pounds(p.setup_pence)} setup` : "No setup fee"}</div>
                 <div className="mt-1 text-slate-600">{p.included_messages.toLocaleString("en-GB")} AI replies included, then {pounds(p.overage_pence)} each</div>
                 <p className="mt-2 text-xs text-slate-500">{p.note}</p>

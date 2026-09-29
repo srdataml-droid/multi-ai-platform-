@@ -88,6 +88,43 @@ def test_demo_passcode_opens_demo_businesses_only(env) -> None:  # type: ignore[
     assert r1.json() == r2.json()
 
 
+def test_a_team_member_signs_in_with_their_own_code(env) -> None:  # type: ignore[no-untyped-def]
+    """Hosted without an identity provider: each person the owner adds gets a code, shown
+    once; a lost code is replaced and the old one stops working."""
+    c = _prod(env)
+    signup = c.post(
+        "/signup",
+        json={
+            "business_name": "Team Co",
+            "email": f"{uuid.uuid4().hex[:8]}@team.test",
+            "pack_id": "hvac",
+            "passcode": PASS,
+        },
+        headers=_ip(),
+    ).json()
+    owner = {"Authorization": f"Bearer {signup['token']}"}
+    tech = f"tech-{uuid.uuid4().hex[:6]}@team.test"
+    added = c.post("/settings/staff", json={"email": tech, "role": "staff"}, headers=owner)
+    assert added.status_code == 200
+    code = added.json()["login_code"]
+    assert code and len(code) == 10
+    assert _login(c, tech, PASS) == 401, "not the shared demo passcode"
+    assert _login(c, tech, code) == 200
+    listed = c.get("/settings/staff", headers=owner).json()["items"]
+    assert all("login_code" not in u for u in listed), "shown once, never listed"
+    fresh = c.post(f"/settings/staff/{added.json()['id']}/code", headers=owner)
+    assert fresh.status_code == 200
+    assert _login(c, tech, code) == 401, "the old code stops working"
+    assert _login(c, tech, fresh.json()["login_code"]) == 200
+    body = {"email": tech, "passcode": fresh.json()["login_code"]}
+    staff_token = c.post("/auth/dev-login", json=body, headers=_ip()).json()["token"]
+    other = c.post(
+        f"/settings/staff/{added.json()['id']}/code",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+    assert other.status_code == 403, "only the owner issues codes"
+
+
 def test_login_attempts_are_limited(env) -> None:  # type: ignore[no-untyped-def]
     c = _prod(env, NOVAXIS_RATE_LIMITS_ENABLED="true")
     email = f"guess-{uuid.uuid4().hex[:6]}@demo-hvac.test"

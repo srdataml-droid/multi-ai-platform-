@@ -11,6 +11,28 @@ const LABELS: Record<string, string> = {
 
 export const label = (k: string): string => LABELS[k] ?? k.replace(/_/g, " ");
 
+const KINDS: Record<string, string> = {
+  reply: "Reply to send",
+  propose_appointment: "Booking request",
+  confirm_appointment: "Confirm booking",
+  reschedule_appointment: "Move booking",
+  cancel_appointment: "Cancel booking",
+  send_reminder: "Reminder",
+  escalate_emergency: "Emergency",
+  hand_to_human: "Hand to a person",
+  outbound_first_contact: "First message",
+  write_to_vendor_system: "Update booking system",
+  collect_payment: "Take payment",
+  quote_price: "Quote",
+  verify_claim: "Check before sending",
+};
+
+// What a proposal is, in a few words: "Booking request", not "propose_appointment".
+export const kindLabel = (kind: string): string => {
+  const words = kind.replace(/_/g, " ");
+  return KINDS[kind] ?? words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 // What the worker wants to do, in words, so an owner can decide without reading JSON.
 export function summarise(params: Record<string, unknown>): [string, string][] {
   return Object.entries(params)

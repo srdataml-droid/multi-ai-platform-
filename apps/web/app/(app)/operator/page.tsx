@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, ErrorLine, Table } from "@/components/ui";
+import { Badge, Button, Card, ErrorLine, PageTitle, Stat, Table } from "@/components/ui";
 import { api, post } from "@/lib/api";
 import { enterTenant } from "@/lib/auth";
 import { ago } from "@/lib/format";
@@ -74,14 +74,15 @@ export default function OperatorPage() {
   const attention = rows.filter((r) => r.health === "attention").length;
   return (
     <div className="flex flex-col gap-4">
+      <PageTitle>Tenants</PageTitle>
       <ErrorLine error={err} />
-      {note && <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card><div className="text-2xl font-semibold">{rows.length}</div><div className="text-xs text-slate-500">customer tenants</div></Card>
-        <Card><div className="text-2xl font-semibold">{rows.filter((r) => r.status === "trial").length}</div><div className="text-xs text-slate-500">on trial</div></Card>
-        <Card><div className={`text-2xl font-semibold ${attention ? "text-amber-600" : ""}`}>{attention}</div><div className="text-xs text-slate-500">need attention</div></Card>
+      {note && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{note}</p>}
+      <div className="grid grid-cols-3 gap-3">
+        <Card><Stat value={rows.length} label="businesses" /></Card>
+        <Card><Stat value={rows.filter((r) => r.status === "trial").length} label="on trial" /></Card>
+        <Card><Stat value={attention} label="need attention" tone={attention ? "amber" : undefined} /></Card>
       </div>
-      <Card title="Tenants" actions={<Button tone="secondary" onClick={load}>Refresh</Button>}>
+      <Card title="All businesses" actions={<Button tone="secondary" onClick={load}>Refresh</Button>}>
         <Table<Row>
           rows={rows}
           empty="No customer tenants yet."
@@ -96,7 +97,7 @@ export default function OperatorPage() {
               key: "actions",
               label: "",
               render: (r) => (
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end">
                   <Button onClick={() => enter(r)}>Enter</Button>
                   {provider === "demo" && (
                     <select aria-label="Simulate billing event" className="rounded border border-slate-300 px-1 py-1 text-xs" value="" onChange={(e) => simulate(r, e.target.value)}>
@@ -109,7 +110,7 @@ export default function OperatorPage() {
             },
           ]}
         />
-        <p className="mt-3 text-xs text-slate-500">Entering a tenant is written to that tenant&apos;s audit log and lasts one hour.</p>
+        <p className="mt-3 text-xs text-slate-500">Entering lasts one hour and is written to that business&apos;s audit log.</p>
       </Card>
     </div>
   );
