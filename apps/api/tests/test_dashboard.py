@@ -276,3 +276,23 @@ def test_only_owners_export_or_erase_and_never_with_a_booking_to_come(
     with service_session() as s:
         assert s.get(Contact, cid) is None and s.get(Conversation, conv_id) is None
     assert client.get(f"/contacts/{cid}/export", headers=_h()).status_code == 404
+
+
+def test_booking_rules_save_and_bad_ones_are_refused(client: TestClient) -> None:
+    """Settings > Protect your time: the rules round-trip, and a mistake fails at save
+    time with a message, not silently at booking time."""
+    settings = client.get("/settings", headers=_h()).json()["settings"]
+    settings["booking_rules"] = {
+        "min_notice_minutes": 120,
+        "buffer_minutes": 15,
+        "max_per_day": 4,
+        "protected": [
+            {"label": "School run", "days": ["mon", "fri"], "start": "15:00", "end": "15:45"}
+        ],
+    }
+    r = client.put("/settings", json={"settings": settings}, headers=_h())
+    assert r.status_code == 200, r.text
+    assert r.json()["settings"]["booking_rules"]["protected"][0]["label"] == "School run"
+    settings["booking_rules"]["protected"][0]["end"] = "14:00"
+    r = client.put("/settings", json={"settings": settings}, headers=_h())
+    assert r.status_code == 422 and "must be after the start" in r.text

@@ -5,6 +5,7 @@ import { Badge, Button, Card, ErrorLine } from "@/components/ui";
 import { AlertsCard } from "@/components/AlertsCard";
 import { BookingBridgeCard } from "@/components/BookingBridge";
 import { AgentKeysCard } from "@/components/AgentKeysCard";
+import { NO_RULES, ProtectTimeCard, type BookingRules } from "@/components/ProtectTimeCard";
 import { api, post, put } from "@/lib/api";
 
 type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
@@ -76,6 +77,7 @@ export default function SettingsPage() {
           })}
         </div>
       </Card>
+      <ProtectTimeCard rules={{ ...NO_RULES, ...(st.booking_rules as Partial<BookingRules> | undefined) }} onChange={(r) => update({ booking_rules: r })} />
       <Card title="Services">
         <table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th>Code</th><th>Name</th><th>Minutes</th><th>Auto-confirm</th><th></th></tr></thead>
           <tbody>{st.services.map((svc, i) => (

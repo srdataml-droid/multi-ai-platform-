@@ -534,3 +534,121 @@ def test_a_bare_number_picks_that_offered_slot(
         )
         assert [c.params["appointment_id"] for c in confirms] == [str(chosen)], "one, slot 2"
         assert confirms[0].state != "rejected"
+
+
+def _quiet_weekday_9am() -> datetime:
+    """A weekday three weeks out, clear of the bookings other tests make on the next one."""
+    d = _next_weekday_9am() + timedelta(days=21)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d
+
+
+def _with_rules(tenant: Tenant, **rules: object) -> Tenant:
+    """The same business with booking rules set (availability reads them off the tenant)."""
+    tenant.settings = {**tenant.settings, "booking_rules": rules}
+    return tenant
+
+
+def _day_window(day: datetime) -> scheduling.Window:
+    return scheduling.Window(day.astimezone(UTC), (day + timedelta(hours=9)).astimezone(UTC), "t")
+
+
+def _local(slots: list[scheduling.Slot]) -> list[str]:
+    return [x.starts_at.astimezone(TZ).strftime("%H:%M") for x in slots]
+
+
+def test_protected_time_is_never_offered(dental: Tenant, cal: FakeCalendar) -> None:
+    """Free is not available: lunch and the school run stay free even with gaps around."""
+    day = _quiet_weekday_9am()
+    weekday = scheduling.WEEKDAYS[day.weekday()]
+    t = _with_rules(
+        dental,
+        protected=[
+            {"label": "Lunch", "days": [weekday], "start": "12:00", "end": "13:00"},
+            {"label": "School run", "days": [weekday], "start": "15:00", "end": "15:45"},
+        ],
+    )
+    with tenant_session(dental.id) as s:
+        got = _local(scheduling.availability(s, t, cal, "hygiene", _day_window(day), limit=50))
+    assert "11:30" in got and "13:00" in got, "right up to the edges"
+    assert not {"12:00", "12:30", "15:00", "15:30"} & set(got)
+    assert "14:30" in got, "14:30-15:00 ends as the school run starts: allowed"
+
+
+def test_a_buffer_keeps_a_gap_around_other_bookings(dental: Tenant, cal: FakeCalendar) -> None:
+    day = _quiet_weekday_9am().replace(hour=10)
+    cal.events["x"] = (
+        scheduling.Slot(day.astimezone(UTC), (day + timedelta(minutes=30)).astimezone(UTC)),
+        "busy",
+    )
+    with tenant_session(dental.id) as s:
+        plain = _local(
+            scheduling.availability(
+                s, dental, cal, "hygiene", _day_window(day.replace(hour=9)), limit=50
+            )
+        )
+        t = _with_rules(dental, buffer_minutes=30)
+        kept = _local(
+            scheduling.availability(
+                s, t, cal, "hygiene", _day_window(day.replace(hour=9)), limit=50
+            )
+        )
+    assert "09:30" in plain and "10:30" in plain
+    assert "09:30" not in kept and "10:30" not in kept, "30 minutes kept free either side"
+    assert "09:00" in kept and "11:00" in kept
+
+
+def test_minimum_notice_moves_the_first_offer_later(dental: Tenant, cal: FakeCalendar) -> None:
+    day = _quiet_weekday_9am()
+    window = _day_window(day)
+    too_soon = int((window.end - datetime.now(UTC)).total_seconds() // 60) + 60
+    with tenant_session(dental.id) as s:
+        assert scheduling.availability(s, dental, cal, "hygiene", window, limit=50)
+        t = _with_rules(dental, min_notice_minutes=too_soon)
+        assert scheduling.availability(s, t, cal, "hygiene", window, limit=50) == []
+
+
+def test_a_full_day_offers_nothing(dental: Tenant, cal: FakeCalendar) -> None:
+    day = _quiet_weekday_9am()
+    _, contact_id = _conv(dental)
+    with tenant_session(dental.id) as s:
+        s.add(
+            Appointment(
+                tenant_id=dental.id,
+                contact_id=contact_id,
+                starts_at=(day + timedelta(hours=8)).astimezone(UTC),
+                ends_at=(day + timedelta(hours=8, minutes=30)).astimezone(UTC),
+                service_code="hygiene",
+                status="confirmed",
+            )
+        )
+        s.flush()
+        assert scheduling.availability(
+            s, _with_rules(dental, max_per_day=2), cal, "hygiene", _day_window(day), limit=50
+        )
+        assert (
+            scheduling.availability(
+                s, _with_rules(dental, max_per_day=1), cal, "hygiene", _day_window(day), limit=50
+            )
+            == []
+        )
+
+
+def test_booking_rules_are_checked_when_saved() -> None:
+    from pydantic import ValidationError
+
+    from novaxis_core.tenant_settings import BookingRules
+
+    ok = BookingRules.model_validate(
+        {"protected": [{"label": "Lunch", "days": ["mon"], "start": "12:00", "end": "13:00"}]}
+    )
+    assert ok.min_notice_minutes == 30 and ok.buffer_minutes == 0 and ok.max_per_day is None
+    for bad in (
+        {"protected": [{"label": "Lunch", "days": ["monday"], "start": "12:00", "end": "13:00"}]},
+        {"protected": [{"label": "Lunch", "days": ["mon"], "start": "13:00", "end": "12:00"}]},
+        {"buffer_minutes": -5},
+        {"max_per_day": 0},
+    ):
+        with pytest.raises(ValidationError):
+            BookingRules.model_validate(bad)

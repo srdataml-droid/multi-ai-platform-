@@ -163,17 +163,25 @@ def availability(
     tz = tz_for(tenant, location)
     minutes = int(_service(tenant, service_code).get("duration_minutes", 60))
     step = timedelta(minutes=minutes)
+    rules = tenant.settings.get("booking_rules") or {}
+    gap = timedelta(minutes=int(rules.get("buffer_minutes") or 0))
+    most = rules.get("max_per_day")
     busy = [
         (b.starts_at, b.ends_at)
         for b in sor.busy(location.calendar_ref if location else None, window.start, window.end)
     ]
     busy += _local_busy(session, window)
-    now = datetime.now(UTC) + timedelta(minutes=30)
+    booked = _booked_per_day(session, window, tz) if most else {}
+    now = datetime.now(UTC) + timedelta(minutes=int(rules.get("min_notice_minutes", 30)))
     slots: list[Slot] = []
     day = window.start.astimezone(tz).date()
     last = window.end.astimezone(tz).date()
     limit = limit or get_settings().slots_offered
     while day <= last and len(slots) < limit:
+        if most and booked.get(day, 0) >= int(most):
+            day += timedelta(days=1)
+            continue
+        blocked = busy + _protected(rules, tz, day)
         for open_at, close_at in _hours_blocks(tenant, tz, day):
             cursor = open_at
             while cursor + step <= close_at and len(slots) < limit:
@@ -181,11 +189,45 @@ def availability(
                 cursor += step
                 if s_start < now or s_start < window.start or s_end > window.end:
                     continue
-                if any(overlaps(s_start, s_end, b0, b1) for b0, b1 in busy):
+                if any(overlaps(s_start - gap, s_end + gap, b0, b1) for b0, b1 in blocked):
                     continue
                 slots.append(Slot(s_start, s_end))
         day += timedelta(days=1)
     return slots
+
+
+def _protected(rules: dict[str, Any], tz: ZoneInfo, day: date) -> list[tuple[datetime, datetime]]:
+    """The business's protected times on this day (lunch, school run...), as busy time."""
+    out: list[tuple[datetime, datetime]] = []
+    for p in rules.get("protected") or []:
+        if WEEKDAYS[day.weekday()] not in p["days"]:
+            continue
+        sh, sm = (int(x) for x in p["start"].split(":"))
+        eh, em = (int(x) for x in p["end"].split(":"))
+        out.append(
+            (
+                datetime.combine(day, time(sh, sm), tz).astimezone(UTC),
+                datetime.combine(day, time(eh, em), tz).astimezone(UTC),
+            )
+        )
+    return out
+
+
+def _booked_per_day(session: Session, window: Window, tz: ZoneInfo) -> dict[date, int]:
+    """Confirmed bookings per local day, for the daily limit. Offers still on hold do not
+    count: only one of them will be booked."""
+    counts: dict[date, int] = {}
+    rows = session.scalars(
+        select(Appointment.starts_at).where(
+            Appointment.status == "confirmed",
+            Appointment.starts_at >= window.start - timedelta(days=1),
+            Appointment.starts_at < window.end + timedelta(days=1),
+        )
+    )
+    for starts_at in rows:
+        d = starts_at.astimezone(tz).date()
+        counts[d] = counts.get(d, 0) + 1
+    return counts
 
 
 def fmt(dt: datetime, tz: ZoneInfo) -> str:

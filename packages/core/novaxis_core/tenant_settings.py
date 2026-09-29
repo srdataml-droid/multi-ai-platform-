@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from novaxis_core.identifiers import normalize_email, routing_phone
 
@@ -39,6 +39,51 @@ class Service(BaseModel):
     auto_confirm: bool = False
 
 
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+class ProtectedTime(BaseModel):
+    """Time nobody can book, even when the diary is free: lunch, a school run, the team
+    meeting, time to prepare quotes."""
+
+    model_config = ConfigDict(extra="forbid")
+    label: str = Field(min_length=1, max_length=60)
+    days: list[str] = Field(min_length=1)
+    start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, v: list[str]) -> list[str]:
+        bad = set(v) - set(_WEEKDAYS)
+        if bad:
+            raise ValueError(f"unknown weekday keys: {sorted(bad)}")
+        return v
+
+    @model_validator(mode="after")
+    def _order(self) -> ProtectedTime:
+        if self.end <= self.start:
+            raise ValueError(f"{self.label}: the end ({self.end}) must be after the start")
+        return self
+
+
+class BookingRules(BaseModel):
+    """Free is not the same as available. What the assistant may offer on top of the
+    opening hours and the calendar's busy times."""
+
+    model_config = ConfigDict(extra="forbid")
+    min_notice_minutes: int = Field(
+        default=30, ge=0, le=14 * 24 * 60, description="How soon a booking may start"
+    )
+    buffer_minutes: int = Field(
+        default=0, ge=0, le=240, description="Gap kept free before and after other bookings"
+    )
+    max_per_day: int | None = Field(
+        default=None, ge=1, le=100, description="Most bookings in one day; empty for no limit"
+    )
+    protected: list[ProtectedTime] = Field(default_factory=list)
+
+
 class ChannelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
@@ -53,6 +98,7 @@ class TenantSettings(BaseModel):
     pack_id: str
     timezone: str = "Europe/London"
     business_hours: dict[str, DayHours] = Field(default_factory=dict)
+    booking_rules: BookingRules = Field(default_factory=BookingRules)
     services: list[Service] = Field(default_factory=list)
     service_area: list[str] = Field(
         default_factory=list, description="Postcode or ZIP prefixes the business serves"
