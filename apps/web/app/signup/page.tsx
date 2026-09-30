@@ -74,7 +74,7 @@ export default function SignupPage() {
             <input data-testid="signup-email" type="email" required autoComplete="email" inputMode="email" value={form.email} onChange={set("email")} />
           </Field>
           <fieldset>
-            <legend className="mb-1.5 text-sm font-medium text-slate-700">Your trade</legend>
+            <legend className="mb-1.5 text-sm font-medium text-slate-700">Your kind of business</legend>
             <div className="flex flex-col gap-2">
               {opts?.packs.map((p) => (
                 <label key={p.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${form.pack_id === p.id ? "border-brand-500 bg-brand-50/60 ring-1 ring-brand-500" : "border-slate-200 hover:border-slate-300"}`}>

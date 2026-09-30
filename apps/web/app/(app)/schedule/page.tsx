@@ -7,6 +7,7 @@ import { Badge, Card, Empty, ErrorLine, PageTitle } from "@/components/ui";
 import { post } from "@/lib/api";
 import { clock, day } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
+import { EXTRAS } from "@/lib/menu";
 
 type Risk = { score: number; level: "low" | "medium" | "high"; reasons: string[] };
 type Appt = { id: string; starts_at: string; ends_at: string; service_code: string; service_name: string; customer_confirmed_at: string | null; status: string; outcome: "attended" | "no_show" | null; risk: Risk | null; external_ref: string | null; contact: { display_name: string | null }; conversation_id: string | null };
@@ -59,7 +60,7 @@ export default function SchedulePage() {
                       <span className="text-sm font-medium text-slate-900">{a.service_name}</span>
                       <Badge tone={a.status === "confirmed" ? "green" : a.status === "held" ? "amber" : "slate"}>{a.status}</Badge>
                       {a.customer_confirmed_at && <Badge tone="green">customer confirmed</Badge>}
-                      {!past && a.risk && (
+                      {EXTRAS && !past && a.risk && (
                         <span title={a.risk.reasons.join("; ")} data-testid="no-show-risk">
                           <Badge tone={riskTone[a.risk.level]}>no-show risk {Math.round(a.risk.score * 100)}%</Badge>
                         </span>

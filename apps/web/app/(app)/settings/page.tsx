@@ -10,6 +10,7 @@ import { NO_RULES, ProtectTimeCard, type BookingRules } from "@/components/Prote
 import { BookingTypesCard, type BookingType } from "@/components/BookingTypesCard";
 import { FaqCard, type Faq } from "@/components/FaqCard";
 import { api, post, put } from "@/lib/api";
+import { EXTRAS } from "@/lib/menu";
 
 type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
 type Staff = { id: string; email: string; role: string };
@@ -171,11 +172,11 @@ export default function SettingsPage() {
       </Card>
       <Card id="channels" title="Channels">
         <ul className="text-sm">{Object.entries(st.channels).map(([k, c]) => <li key={k} className="flex justify-between border-t border-slate-100 py-1"><span>{k}</span><span>{c.enabled ? <Badge tone="green">enabled</Badge> : <Badge>off</Badge>} <span className="text-xs text-slate-500">{Object.values(c.config).join(" · ")}</span></span></li>)}</ul>
-        <label className="mt-3 flex items-center gap-2 text-sm">
+        {EXTRAS && <><label className="mt-3 flex items-center gap-2 text-sm">
           <input data-testid="answer-calls" type="checkbox" checked={Boolean(st.channels.twilio_voice?.enabled)} onChange={(e) => update({ channels: { ...st.channels, twilio_voice: { enabled: e.target.checked, config: st.channels.twilio_voice?.config ?? {} } } })} />
           Answer phone calls to your SMS number with the assistant
         </label>
-        <p className="mt-1 pl-6 text-xs text-slate-500">Emergencies go straight to your on-call number. Needs a Twilio number.</p>
+        <p className="mt-1 pl-6 text-xs text-slate-500">Emergencies go straight to your on-call number. Needs a Twilio number.</p></>}
         <label className="mt-3 flex items-center gap-2 text-sm">
           <input data-testid="twilio-whatsapp" type="checkbox" checked={Boolean(st.channels.twilio_whatsapp?.enabled)} onChange={(e) => update({ channels: { ...st.channels, twilio_whatsapp: { enabled: e.target.checked, config: st.channels.twilio_whatsapp?.config ?? {} } } })} />
           Answer WhatsApp messages with the assistant (through Twilio)
@@ -187,8 +188,8 @@ export default function SettingsPage() {
         <ul className="mt-2 text-sm">{(integ?.items ?? []).map((i) => <li key={i.id} className="flex justify-between border-t border-slate-100 py-1"><span>{i.provider}</span><span className="flex gap-2"><Badge tone={i.health === "connected" ? "green" : "slate"}>{i.health}</Badge>{i.health === "connected" && <button className="text-xs text-red-600" onClick={() => post(`/integrations/${i.id}/disconnect`).then(load)}>disconnect</button>}</span></li>)}</ul>
       </Card>
       <AlertsCard />
-      <AgentKeysCard assistant={String(st.assistant ?? "built_in")} onAssistant={(v) => update({ assistant: v })} />
-      <BookingBridgeCard onChange={load} />
+      {EXTRAS && <AgentKeysCard assistant={String(st.assistant ?? "built_in")} onAssistant={(v) => update({ assistant: v })} />}
+      {EXTRAS && <BookingBridgeCard onChange={load} />}
       <Card id="team" title="Team">
         {issued && (
           <div data-testid="staff-code" className="mb-3 rounded-xl bg-brand-50 p-3 text-sm ring-1 ring-inset ring-brand-100">

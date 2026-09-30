@@ -22,6 +22,8 @@ export default defineConfig({
     url: "http://localhost:3000/login",
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 300_000 : 120_000,
-    env: { NOVAXIS_API_URL: process.env.NOVAXIS_API_URL ?? "http://localhost:8000" },
+    // Extras on: the specs also cover the parked parts (stock, own agent, bridge, model
+    // guesses), which stay in the code; the menu with them off is unit-tested (menu.test.ts).
+    env: { NOVAXIS_API_URL: process.env.NOVAXIS_API_URL ?? "http://localhost:8000", NEXT_PUBLIC_NOVAXIS_EXTRAS: "1" },
   },
 });

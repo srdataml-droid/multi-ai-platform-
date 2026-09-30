@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { exitTenant, getToken, setToken } from "@/lib/auth";
 import { setBusinessTimeZone } from "@/lib/format";
 import { every } from "@/lib/every";
+import { type MenuLink, menuFor } from "@/lib/menu";
 import { Icon, type IconName, Logo } from "@/components/icons";
 
 type Me = {
@@ -16,24 +17,8 @@ type Me = {
   tenant: { slug: string; name: string; pack_id: string; status: string; plan: string; onboarded: boolean; timezone: string; alerts_off: boolean } | null;
 };
 type Pack = { name: string; vocabulary: Record<string, string>; dashboard: { labels: Record<string, string> } };
-type NavLink = { href: string; label: string; icon: IconName; roles?: string[] };
+type NavLink = MenuLink;
 
-// Everyone can read every page; the API refuses what a role may not do. Setup and billing
-// are the owner's alone, so nobody else is shown them.
-const OWNERS = ["owner", "operator"];
-const LINKS: NavLink[] = [
-  { href: "/inbox", label: "Inbox", icon: "inbox" },
-  { href: "/approvals", label: "Approvals", icon: "check" },
-  { href: "/schedule", label: "Schedule", icon: "calendar" },
-  { href: "/contacts", label: "Contacts", icon: "users" },
-  { href: "/queue", label: "Work queue", icon: "queue" },
-  { href: "/stock", label: "Stock", icon: "box" },
-  { href: "/analytics", label: "Analytics", icon: "chart" },
-  { href: "/settings", label: "Settings", icon: "settings" },
-  { href: "/onboarding", label: "Setup", icon: "rocket", roles: OWNERS },
-  { href: "/billing", label: "Billing", icon: "card", roles: OWNERS },
-];
-const OPERATOR_LINKS: NavLink[] = [{ href: "/operator", label: "Tenants", icon: "building" }];
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", staff: "Team", viewer: "View only", operator: "Novaxis" };
 export const TENANT_CHANGED = "novaxis:tenant-changed";
 
@@ -80,7 +65,7 @@ export function Nav() {
   useEffect(() => setMoreOpen(false), [path]);
 
   const role = me?.role ?? "";
-  const links = (console_ ? OPERATOR_LINKS : LINKS).filter((l) => !l.roles || l.roles.includes(role));
+  const links = menuFor(role, console_);
   const label = (l: NavLink) => (l.href === "/contacts" && pack?.vocabulary.customer ? cap(pack.vocabulary.customer) + "s" : l.label);
   const active = (l: NavLink) => path.startsWith(l.href);
   const tabs = links.slice(0, 4);
@@ -131,7 +116,7 @@ export function Nav() {
       <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 grid border-t border-slate-200 bg-white/95 backdrop-blur md:hidden" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
         {tabs.map((l) => (
           <Link key={l.href} href={l.href} aria-current={active(l) ? "page" : undefined} className={`relative flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium ${active(l) ? "text-brand-700" : "text-slate-500"}`}>
-            <Icon name={l.icon} className="h-6 w-6" />
+            <Icon name={l.icon as IconName} className="h-6 w-6" />
             <span className="max-w-full truncate px-1">{label(l)}</span>
             {l.href === "/approvals" && awaiting > 0 && <span className="absolute left-1/2 top-1 ml-2 min-w-5 rounded-full bg-amber-400 px-1 text-center text-[10px] font-semibold leading-4 text-amber-950">{awaiting > 99 ? "99+" : awaiting}</span>}
           </Link>
@@ -151,7 +136,7 @@ export function Nav() {
             <div className="grid grid-cols-3 gap-2">
               {rest.map((l) => (
                 <Link key={l.href} href={l.href} className={`flex flex-col items-center gap-1.5 rounded-2xl p-3 text-xs font-medium ${active(l) ? "bg-brand-50 text-brand-700" : "bg-slate-50 text-slate-700"}`}>
-                  <Icon name={l.icon} className="h-6 w-6" />
+                  <Icon name={l.icon as IconName} className="h-6 w-6" />
                   {label(l)}
                 </Link>
               ))}
@@ -188,7 +173,7 @@ export function Nav() {
         <nav aria-label="Main" className="flex flex-col gap-0.5 text-sm">
           {links.map((l) => (
             <Link key={l.href} href={l.href} aria-current={active(l) ? "page" : undefined} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 font-medium ${active(l) ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-              <Icon name={l.icon} className="h-[18px] w-[18px]" />
+              <Icon name={l.icon as IconName} className="h-[18px] w-[18px]" />
               <span className="flex-1">{label(l)}</span>
               {count(l, "approvals-badge")}
             </Link>

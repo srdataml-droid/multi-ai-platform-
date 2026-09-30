@@ -15,7 +15,7 @@ test("sign up, onboard, pay, and the operator enters with an audit trail", async
   await page.goto("/signup");
   await page.getByTestId("business-name").fill(business);
   await page.getByTestId("signup-email").fill(`owner-${stamp}@e2e.test`);
-  await page.getByText("Heating, cooling").click();
+  await page.getByText("Trades (heating").click();
   await shot(page, "01-signup");
   await page.getByRole("button", { name: "Create my account" }).click();
 

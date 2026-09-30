@@ -1,5 +1,5 @@
 id: generic
-name: Generic service business
+name: Any other appointment business (salon, cleaner, tailor, clinic)
 version: "0.1"
 tools: [extract_fields, propose_appointment, confirm_appointment, reschedule_appointment, cancel_appointment, hand_to_human, escalate_emergency]
 intake_opening: "Could I take your name, and a few words on what you need help with?"

@@ -37,11 +37,6 @@ export default function LoginPage() {
       /* storage unavailable */
     }
   }, []);
-  // Local mode signs in without a code, so offer a seeded account to try.
-  useEffect(() => {
-    if (cfg?.mode === "dev") setEmail((e) => (!e || Object.values(WHO).some((w) => w.demoEmail === e) ? WHO[who].demoEmail : e));
-  }, [cfg, who]);
-
   const choose = (w: Who) => {
     setWho(w);
     setError(null);
@@ -51,12 +46,16 @@ export default function LoginPage() {
       /* storage unavailable */
     }
   };
+  // Local mode signs in without a code: an empty email field tries the seeded account shown
+  // as its hint. Nothing is typed into the field for them, so it never races their typing.
+  const demo = cfg?.mode === "dev" ? WHO[who].demoEmail : "";
   const submit = async () => {
     setError(null);
     setBusy(true);
+    const address = email || demo;
     try {
       const token =
-        cfg?.mode === "supabase" ? await supabaseLogin(cfg, email, password) : await devLogin(email, cfg?.mode === "demo" ? passcode : undefined);
+        cfg?.mode === "supabase" ? await supabaseLogin(cfg, address, password) : await devLogin(address, cfg?.mode === "demo" ? passcode : undefined);
       setToken(token);
       router.replace(WHO[who].next);
     } catch (e) {
@@ -86,7 +85,7 @@ export default function LoginPage() {
       <ErrorLine error={error} />
       <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <Field label="Email">
-          <input data-testid="email" type="email" autoComplete="username" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input data-testid="email" type="email" autoComplete="username" inputMode="email" required={!demo} placeholder={demo || undefined} value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
         {cfg?.mode === "supabase" && (
           <Field label="Password">

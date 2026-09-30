@@ -7,6 +7,7 @@ import { post } from "@/lib/api";
 import { changed, editable, kindLabel, label, summarise, withEdits } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { usePoll } from "@/lib/usePoll";
+import { EXTRAS } from "@/lib/menu";
 
 type Prediction = { p: number; level: "likely" | "unsure" | "unlikely"; reasons: string[]; data: "real" | "synthetic" };
 type Proposal = { id: string; conversation_id: string | null; kind: string; params: Record<string, unknown>; risk: string; reason: string | null; created_at: string; prediction: Prediction | null };
@@ -106,7 +107,7 @@ export default function ApprovalsPage() {
             {p.reason && <>{p.reason.replace(/: default$/, "")} · </>}{ago(p.created_at)}
             {p.conversation_id && <> · <Link className="font-medium text-brand-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link></>}
           </p>
-          {p.prediction && <Guess g={p.prediction} />}
+          {EXTRAS && p.prediction && <Guess g={p.prediction} />}
           <dl className="mb-3 grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-slate-50 p-3 text-sm" data-testid={`summary-${p.id}`}>
             {summarise(p.params).map(([k, v]) => (
               <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words text-slate-900">{v}</dd></div>
@@ -132,7 +133,7 @@ export default function ApprovalsPage() {
           )}
         </Card>
       ))}
-      {learning && <LearningCard l={learning} />}
+      {EXTRAS && learning && <LearningCard l={learning} />}
     </div>
   );
 }

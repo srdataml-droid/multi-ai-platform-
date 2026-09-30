@@ -1,5 +1,5 @@
 id: hvac
-name: Heating, cooling, plumbing and electrical contractors
+name: Trades (heating, plumbing, electrical)
 version: "0.1"
 tools: [extract_fields, propose_appointment, confirm_appointment, reschedule_appointment, cancel_appointment, hand_to_human, escalate_emergency]
 intake_opening: "Sorry to hear you're having trouble. Could I take your name, and what's going on with the system?"
