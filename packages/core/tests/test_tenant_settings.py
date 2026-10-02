@@ -100,3 +100,80 @@ def test_whatsapp_update_template_is_a_meta_name_and_language() -> None:
     ):
         with pytest.raises(ValidationError):
             wa(bad)
+
+
+def test_technicians_must_reference_real_services_and_workdays() -> None:
+    s = TenantSettings.model_validate(
+        {
+            "pack_id": "hvac",
+            "services": [
+                {"code": "repair", "name": "Repair", "duration_minutes": 60},
+                {"code": "install", "name": "Install", "duration_minutes": 180},
+            ],
+            "technicians": [
+                {
+                    "code": "james",
+                    "name": "James",
+                    "service_codes": ["repair"],
+                    "working_days": ["mon", "wed", "fri"],
+                }
+            ],
+        }
+    )
+    assert s.technicians[0].service_codes == ["repair"]
+    assert s.technicians[0].working_days == ["mon", "wed", "fri"]
+
+    with pytest.raises(ValidationError, match="unknown services"):
+        TenantSettings.model_validate(
+            {
+                "pack_id": "hvac",
+                "services": [{"code": "repair", "name": "Repair", "duration_minutes": 60}],
+                "technicians": [
+                    {
+                        "code": "james",
+                        "name": "James",
+                        "service_codes": ["install"],
+                        "working_days": ["mon"],
+                    }
+                ],
+            }
+        )
+    with pytest.raises(ValidationError, match="unknown weekday"):
+        TenantSettings.model_validate(
+            {
+                "pack_id": "hvac",
+                "services": [{"code": "repair", "name": "Repair", "duration_minutes": 60}],
+                "technicians": [
+                    {
+                        "code": "james",
+                        "name": "James",
+                        "service_codes": ["repair"],
+                        "working_days": ["monday"],
+                    }
+                ],
+            }
+        )
+
+
+def test_technician_codes_are_unique() -> None:
+    with pytest.raises(ValidationError, match="share a code"):
+        TenantSettings.model_validate(
+            {
+                "pack_id": "hvac",
+                "services": [{"code": "repair", "name": "Repair", "duration_minutes": 60}],
+                "technicians": [
+                    {
+                        "code": "tech",
+                        "name": "James",
+                        "service_codes": ["repair"],
+                        "working_days": ["mon"],
+                    },
+                    {
+                        "code": "tech",
+                        "name": "Maya",
+                        "service_codes": ["repair"],
+                        "working_days": ["tue"],
+                    },
+                ],
+            }
+        )
