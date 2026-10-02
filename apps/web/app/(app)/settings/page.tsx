@@ -12,13 +12,14 @@ import { FaqCard, type Faq } from "@/components/FaqCard";
 import { api, post, put } from "@/lib/api";
 import { EXTRAS } from "@/lib/menu";
 
-type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
+type Technician = { code: string; name: string; service_codes: string[]; working_days: string[] };
+type Settings = { tenant: { name: string; slug: string; pack_id: string; worker_enabled: boolean }; settings: Record<string, unknown> & { business_hours: Record<string, { open: string; close: string }>; services: { code: string; name: string; duration_minutes: number; auto_confirm: boolean }[]; technicians?: Technician[]; service_area: string[]; risk_overrides: Record<string, string>; channels: Record<string, { enabled: boolean; config: Record<string, string> }> }; risk_floors: Record<string, { default: string; floor: string; description: string }> };
 type Staff = { id: string; email: string; role: string };
 type Integration = { id: string; provider: string; health: string };
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_NAME: Record<string, string> = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
 const ROLE_NAME: Record<string, string> = { owner: "Owner", staff: "Team", viewer: "View only" };
-const SECTIONS: [string, string][] = [["business", "Business"], ["hours", "Hours"], ["services", "Services"], ["answers", "Answers"], ["types", "Booking types"], ["channels", "Channels"], ["team", "Team"], ["widget", "Website chat"], ["data", "Customer data"]];
+const SECTIONS: [string, string][] = [["business", "Business"], ["hours", "Hours"], ["services", "Services"], ["field", "Field team"], ["answers", "Answers"], ["types", "Booking types"], ["channels", "Channels"], ["team", "Team"], ["widget", "Website chat"], ["data", "Customer data"]];
 const RISKS = ["low", "medium", "high"];
 
 export default function SettingsPage() {
@@ -139,6 +140,41 @@ export default function SettingsPage() {
               </div>
             );
           })}
+        </div>
+      </Card>
+      <Card id="field" title="Field team" actions={<Button tone="secondary" onClick={() => update({ technicians: [...((st.technicians as Technician[] | undefined) ?? []), { code: `tech_${((st.technicians as Technician[] | undefined) ?? []).length + 1}`, name: "New technician", service_codes: st.services[0] ? [st.services[0].code] : [], working_days: ["mon", "tue", "wed", "thu", "fri"] }] })}>Add technician</Button>}>
+        <p className="mb-3 text-xs text-slate-500">Novaxis only offers a day when at least one person who can do that service is working. Leave this empty to keep shared-calendar scheduling.</p>
+        <div className="flex flex-col gap-3">
+          {((st.technicians as Technician[] | undefined) ?? []).map((tech, i) => {
+            const technicians = (st.technicians as Technician[] | undefined) ?? [];
+            const setTech = (patch: Partial<Technician>) => {
+              const next = [...technicians];
+              next[i] = { ...tech, ...patch };
+              update({ technicians: next });
+            };
+            return (
+              <div key={tech.code + i} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <div className="grid gap-2 md:grid-cols-[1.5fr_1fr_auto]">
+                  <label className="flex flex-col gap-1"><span className="text-xs text-slate-500">Name</span><input value={tech.name} onChange={(e) => setTech({ name: e.target.value })} /></label>
+                  <label className="flex flex-col gap-1"><span className="text-xs text-slate-500">Code</span><input value={tech.code} onChange={(e) => setTech({ code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })} /></label>
+                  <button className="self-end py-2 text-xs font-medium text-red-600" onClick={() => update({ technicians: technicians.filter((_, j) => j !== i) })}>Remove</button>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-1 text-xs text-slate-500">Services they can handle</p>
+                  <div className="flex flex-wrap gap-3">
+                    {st.services.map((svc) => <label key={svc.code} className="flex items-center gap-1.5"><input type="checkbox" checked={tech.service_codes.includes(svc.code)} onChange={(e) => setTech({ service_codes: e.target.checked ? [...tech.service_codes, svc.code] : tech.service_codes.filter((x) => x !== svc.code) })} />{svc.name}</label>)}
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-1 text-xs text-slate-500">Normal working days</p>
+                  <div className="flex flex-wrap gap-3">
+                    {DAYS.map((d) => <label key={d} className="flex items-center gap-1.5"><input type="checkbox" checked={tech.working_days.includes(d)} onChange={(e) => setTech({ working_days: e.target.checked ? [...tech.working_days, d] : tech.working_days.filter((x) => x !== d) })} />{DAY_NAME[d].slice(0, 3)}</label>)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {((st.technicians as Technician[] | undefined) ?? []).length === 0 && <p className="text-sm text-slate-500">No technician rules yet. Availability uses the shared business calendar.</p>}
         </div>
       </Card>
       <div id="answers" className="scroll-mt-32" />
