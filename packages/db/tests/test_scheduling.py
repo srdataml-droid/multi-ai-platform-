@@ -652,3 +652,53 @@ def test_booking_rules_are_checked_when_saved() -> None:
     ):
         with pytest.raises(ValidationError):
             BookingRules.model_validate(bad)
+
+
+def test_technician_skills_and_workdays_limit_offered_days(
+    dental: Tenant, cal: FakeCalendar
+) -> None:
+    """When a business configures field workers, Novaxis only offers a day where at
+    least one person who can do that service is normally working."""
+    day = _quiet_weekday_9am()
+    weekday = scheduling.WEEKDAYS[day.weekday()]
+    next_day = day + timedelta(days=1)
+    while next_day.weekday() >= 5:
+        next_day += timedelta(days=1)
+    next_weekday = scheduling.WEEKDAYS[next_day.weekday()]
+    dental.settings = {
+        **dental.settings,
+        "technicians": [
+            {
+                "code": "repair_only",
+                "name": "Repair Tech",
+                "service_codes": ["checkup"],
+                "working_days": [next_weekday],
+            },
+            {
+                "code": "wrong_skill",
+                "name": "Other Tech",
+                "service_codes": ["hygiene"],
+                "working_days": [weekday],
+            },
+        ],
+    }
+    window = scheduling.Window(
+        day.astimezone(UTC),
+        (next_day + timedelta(hours=9)).astimezone(UTC),
+        "two days",
+    )
+    with tenant_session(dental.id) as s:
+        slots = scheduling.availability(s, dental, cal, "checkup", window, limit=50)
+
+    assert slots
+    assert all(x.starts_at.astimezone(TZ).date() == next_day.date() for x in slots)
+
+
+def test_no_technician_configuration_keeps_shared_calendar_behaviour(
+    dental: Tenant, cal: FakeCalendar
+) -> None:
+    day = _quiet_weekday_9am()
+    dental.settings = {**dental.settings, "technicians": []}
+    with tenant_session(dental.id) as s:
+        slots = scheduling.availability(s, dental, cal, "hygiene", _day_window(day), limit=50)
+    assert slots, "existing tenants without technician profiles keep the old scheduling path"
