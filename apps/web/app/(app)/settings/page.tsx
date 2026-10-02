@@ -205,9 +205,13 @@ export default function SettingsPage() {
         <p className="text-sm">System of record: <strong>{integ?.system_of_record ?? "…"}</strong></p>
         <ul className="mt-2 text-sm">{(integ?.items ?? []).map((i) => <li key={i.id} className="flex justify-between border-t border-slate-100 py-1"><span>{i.provider}</span><span className="flex gap-2"><Badge tone={i.health === "connected" ? "green" : "slate"}>{i.health}</Badge>{i.health === "connected" && <button className="text-xs text-red-600" onClick={() => post(`/integrations/${i.id}/disconnect`).then(load)}>disconnect</button>}</span></li>)}</ul>
       </Card>
-      <AlertsCard />
-      {EXTRAS && <AgentKeysCard assistant={String(st.assistant ?? "built_in")} onAssistant={(v) => update({ assistant: v })} />}
-      {EXTRAS && <BookingBridgeCard onChange={load} />}
+      {!SIMPLE_PILOT && (
+        <>
+          <AlertsCard />
+          {EXTRAS && <AgentKeysCard assistant={String(st.assistant ?? "built_in")} onAssistant={(v) => update({ assistant: v })} />}
+          {EXTRAS && <BookingBridgeCard onChange={load} />}
+        </>
+      )}
       {!SIMPLE_PILOT && (
         <>
                 <Card id="team" title="Team">
