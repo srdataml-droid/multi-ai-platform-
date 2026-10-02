@@ -124,6 +124,24 @@ def _service(tenant: Tenant, service_code: str) -> dict[str, Any]:
     return {"code": service_code, "name": service_code, "duration_minutes": 60}
 
 
+def eligible_technicians(tenant: Tenant, service_code: str, day: date) -> list[dict[str, Any]]:
+    """People configured to handle this service and normally working on this local day.
+
+    No technician configuration means legacy shared-calendar scheduling: the business
+    has not asked Novaxis to reason about individual workers yet.
+    """
+    technicians = tenant.settings.get("technicians") or []
+    if not technicians:
+        return []
+    weekday = WEEKDAYS[day.weekday()]
+    return [
+        dict(t)
+        for t in technicians
+        if service_code in (t.get("service_codes") or [])
+        and weekday in (t.get("working_days") or [])
+    ]
+
+
 def _hours_blocks(tenant: Tenant, tz: ZoneInfo, day: date) -> list[tuple[datetime, datetime]]:
     hours = tenant.settings.get("business_hours") or {}
     h = hours.get(WEEKDAYS[day.weekday()])
@@ -177,7 +195,11 @@ def availability(
     day = window.start.astimezone(tz).date()
     last = window.end.astimezone(tz).date()
     limit = limit or get_settings().slots_offered
+    technicians_configured = bool(tenant.settings.get("technicians"))
     while day <= last and len(slots) < limit:
+        if technicians_configured and not eligible_technicians(tenant, service_code, day):
+            day += timedelta(days=1)
+            continue
         if most and booked.get(day, 0) >= int(most):
             day += timedelta(days=1)
             continue
