@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { exitTenant, getToken, setToken } from "@/lib/auth";
 import { setBusinessTimeZone } from "@/lib/format";
 import { every } from "@/lib/every";
-import { type MenuLink, menuFor } from "@/lib/menu";
+import { SIMPLE_PILOT, type MenuLink, menuFor } from "@/lib/menu";
 import { Icon, type IconName, Logo } from "@/components/icons";
 
 type Me = {
@@ -87,6 +87,7 @@ export function Nav() {
     ) : null;
 
   const status =
+    SIMPLE_PILOT ? null :
     !console_ && me?.tenant?.status === "trial" ? (
       <Link href="/billing" className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-200">Free trial</Link>
     ) : !console_ && me?.tenant?.status === "paused" ? (
