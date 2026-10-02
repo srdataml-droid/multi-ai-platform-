@@ -42,6 +42,30 @@ class Service(BaseModel):
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
+class Technician(BaseModel):
+    """A field worker the scheduler may rely on for a service.
+
+    This is deliberately smaller than dispatch: Phase 1 only needs to know whether at
+    least one suitably skilled person is working that day before it offers a slot.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(pattern=r"^[a-z0-9_]+$")
+    name: str = Field(min_length=1, max_length=100)
+    service_codes: list[str] = Field(min_length=1)
+    working_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
+
+    @field_validator("working_days")
+    @classmethod
+    def _working_days(cls, v: list[str]) -> list[str]:
+        bad = set(v) - set(_WEEKDAYS)
+        if bad:
+            raise ValueError(f"unknown weekday keys: {sorted(bad)}")
+        if not v:
+            raise ValueError("a technician must work at least one day")
+        return list(dict.fromkeys(v))
+
+
 class ProtectedTime(BaseModel):
     """Time nobody can book, even when the diary is free: lunch, a school run, the team
     meeting, time to prepare quotes."""
@@ -154,6 +178,10 @@ class TenantSettings(BaseModel):
     business_hours: dict[str, DayHours] = Field(default_factory=dict)
     booking_rules: BookingRules = Field(default_factory=BookingRules)
     services: list[Service] = Field(default_factory=list)
+    technicians: list[Technician] = Field(
+        default_factory=list,
+        description="Field workers, their service skills and normal working days. Empty keeps legacy shared-calendar scheduling.",
+    )
     faqs: list[Faq] = Field(
         default_factory=list,
         max_length=60,
@@ -214,6 +242,15 @@ class TenantSettings(BaseModel):
         names = [t.name.strip().lower() for t in self.booking_types]
         if len(names) != len(set(names)):
             raise ValueError("two booking types share a name")
+        tech_codes = [t.code for t in self.technicians]
+        if len(tech_codes) != len(set(tech_codes)):
+            raise ValueError("two technicians share a code")
+        for tech in self.technicians:
+            unknown = sorted(set(tech.service_codes) - codes)
+            if unknown:
+                raise ValueError(
+                    f"technician '{tech.name}' handles unknown services: {unknown}"
+                )
         return self
 
     @field_validator("business_hours")
