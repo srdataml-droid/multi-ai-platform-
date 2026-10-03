@@ -82,6 +82,29 @@ def test_list_shows_awaiting_only(client: TestClient) -> None:
     assert all(i["state"] == "awaiting" for i in r.json()["items"])
 
 
+def test_list_includes_customer_context_for_the_decision(client: TestClient) -> None:
+    pid, conv_id = _awaiting(
+        "confirm_appointment",
+        {"appointment_id": "00000000-0000-0000-0000-000000000000", "service_code": "repair_visit"},
+    )
+    with service_session() as s:
+        conv = s.get(Conversation, conv_id)
+        assert conv is not None
+        conv.extracted = {
+            "name": "Jamie",
+            "problem_type": "no heating",
+            "symptom": "stopped this morning",
+            "postcode": "SW1 1AA",
+            "preferred_window": "tomorrow morning",
+        }
+
+    r = client.get("/approvals", headers=_owner())
+    mine = next(i for i in r.json()["items"] if i["id"] == str(pid))
+    assert mine["customer"]["intake"]["problem_type"] == "no heating"
+    assert mine["customer"]["intake"]["postcode"] == "SW1 1AA"
+    assert mine["customer"]["channel"] == "webchat"
+
+
 def test_approve_executes_and_records(client: TestClient) -> None:
     pid, conv_id = _awaiting()
     r = client.post(
