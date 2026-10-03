@@ -20,10 +20,13 @@ from sqlalchemy import select
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_core.agent_webhooks import enqueue as enqueue_agent_event
 from novaxis_core.approval_model import model_for, shadow_report
+from novaxis_core.booking_types import sensitive_keys_for
 from novaxis_core.executors import execute
 from novaxis_core.gate import GateContext, decide
 from novaxis_core.models import ActionProposal, Approval, AuditLog, Contact, Conversation, Tenant
+from novaxis_core.sensitive import reveal
 from novaxis_core.turn import ground_params
+from novaxis_packs import get_pack
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -55,6 +58,36 @@ def _serialise(p: ActionProposal) -> dict[str, Any]:
     }
 
 
+def _serialise_with_customer(
+    session: TenantDb, principal: CurrentPrincipal, p: ActionProposal
+) -> dict[str, Any]:
+    """Approval cards need the customer context a dispatcher actually decides from.
+
+    Keep the action proposal as the source of truth for what will execute, and attach a
+    read-only snapshot of the conversation intake. Private booking answers follow the same
+    role-based reveal rule as the conversation screen.
+    """
+    out = _serialise(p)
+    conv = session.get(Conversation, p.conversation_id) if p.conversation_id else None
+    if conv is None:
+        out["customer"] = None
+        return out
+    contact = session.get(Contact, conv.contact_id)
+    tenant = session.scalar(select(Tenant))
+    pack = get_pack(tenant.pack_id if tenant else "generic")
+    private = sensitive_keys_for(tenant, pack) if tenant else pack.sensitive_keys
+    out["customer"] = {
+        "name": contact.display_name if contact else None,
+        "phone": contact.phones[0] if contact and contact.phones else None,
+        "email": contact.emails[0] if contact and contact.emails else None,
+        "channel": conv.channel,
+        "status": conv.status,
+        "summary": conv.summary,
+        "intake": reveal(conv.extracted, private, principal.role),
+    }
+    return out
+
+
 @router.get("")
 def list_awaiting(principal: CurrentPrincipal, session: TenantDb) -> dict[str, Any]:
     rows = list(
@@ -64,7 +97,10 @@ def list_awaiting(principal: CurrentPrincipal, session: TenantDb) -> dict[str, A
             .order_by(ActionProposal.created_at.asc())
         )
     )
-    return {"items": [_serialise(p) for p in rows], "count": len(rows)}
+    return {
+        "items": [_serialise_with_customer(session, principal, p) for p in rows],
+        "count": len(rows),
+    }
 
 
 @router.get("/learning")
@@ -94,7 +130,7 @@ def get_one(
     p = session.get(ActionProposal, proposal_id)
     if p is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such proposal")
-    return _serialise(p)
+    return _serialise_with_customer(session, principal, p)
 
 
 def _context_for(session: TenantDb, p: ActionProposal) -> GateContext:
