@@ -4,13 +4,22 @@ import { menuFor } from "../lib/menu.ts";
 
 const hrefs = (role: string, extras: boolean) => menuFor(role, false, extras).map((l) => l.href);
 
-test("the prototype menu is the core loop; parked pages stay out", () => {
-  assert.deepEqual(hrefs("owner", false), ["/inbox", "/approvals", "/schedule", "/contacts", "/settings", "/onboarding", "/billing"]);
-  assert.deepEqual(hrefs("staff", false), ["/inbox", "/approvals", "/schedule", "/contacts", "/settings"]);
+test("the default pilot exposes only the request-to-booking loop", () => {
+  const expected = ["/inbox", "/approvals", "/schedule", "/settings"];
+  assert.deepEqual(hrefs("owner", false), expected);
+  assert.deepEqual(hrefs("staff", false), expected);
+  assert.deepEqual(hrefs("viewer", false), expected);
 });
 
-test("a deployment with extras switched on shows the parked pages again", () => {
-  for (const page of ["/queue", "/analytics", "/stock"]) assert.ok(hrefs("owner", true).includes(page));
+test("extras restore the parked full product without a second codebase", () => {
+  assert.deepEqual(hrefs("owner", true), [
+    "/inbox", "/approvals", "/schedule", "/contacts", "/settings",
+    "/onboarding", "/billing", "/queue", "/analytics", "/stock",
+  ]);
+  assert.deepEqual(hrefs("staff", true), [
+    "/inbox", "/approvals", "/schedule", "/contacts", "/settings",
+    "/queue", "/analytics", "/stock",
+  ]);
 });
 
 test("the operator console shows only the businesses", () => {

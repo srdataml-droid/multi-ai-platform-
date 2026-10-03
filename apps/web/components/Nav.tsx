@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { exitTenant, getToken, setToken } from "@/lib/auth";
 import { setBusinessTimeZone } from "@/lib/format";
 import { every } from "@/lib/every";
-import { type MenuLink, menuFor } from "@/lib/menu";
+import { SIMPLE_PILOT, type MenuLink, menuFor } from "@/lib/menu";
 import { Icon, type IconName, Logo } from "@/components/icons";
 
 type Me = {
@@ -87,6 +87,7 @@ export function Nav() {
     ) : null;
 
   const status =
+    SIMPLE_PILOT ? null :
     !console_ && me?.tenant?.status === "trial" ? (
       <Link href="/billing" className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-200">Free trial</Link>
     ) : !console_ && me?.tenant?.status === "paused" ? (
@@ -113,7 +114,7 @@ export function Nav() {
         {me?.acting && <button className="text-xs font-medium text-amber-800 underline" onClick={exit}>Exit</button>}
       </header>
 
-      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 grid border-t border-slate-200 bg-white/95 backdrop-blur md:hidden" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
+      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 grid border-t border-slate-200 bg-white/95 backdrop-blur md:hidden" style={{ gridTemplateColumns: `repeat(${tabs.length + (rest.length ? 1 : 0)}, minmax(0, 1fr))` }}>
         {tabs.map((l) => (
           <Link key={l.href} href={l.href} aria-current={active(l) ? "page" : undefined} className={`relative flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium ${active(l) ? "text-brand-700" : "text-slate-500"}`}>
             <Icon name={l.icon as IconName} className="h-6 w-6" />
@@ -121,13 +122,15 @@ export function Nav() {
             {l.href === "/approvals" && awaiting > 0 && <span className="absolute left-1/2 top-1 ml-2 min-w-5 rounded-full bg-amber-400 px-1 text-center text-[10px] font-semibold leading-4 text-amber-950">{awaiting > 99 ? "99+" : awaiting}</span>}
           </Link>
         ))}
-        <button aria-expanded={moreOpen} onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium ${rest.some(active) ? "text-brand-700" : "text-slate-500"}`}>
-          <Icon name="more" className="h-6 w-6" />
-          More
-        </button>
+        {rest.length > 0 && (
+          <button aria-expanded={moreOpen} onClick={() => setMoreOpen(true)} className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium ${rest.some(active) ? "text-brand-700" : "text-slate-500"}`}>
+            <Icon name="more" className="h-6 w-6" />
+            More
+          </button>
+        )}
       </nav>
 
-      {moreOpen && (
+      {rest.length > 0 && moreOpen && (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="More">
           <button aria-label="Close" className="absolute inset-0 bg-slate-900/40" onClick={() => setMoreOpen(false)} />
           <div className="pb-safe absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4 shadow-2xl">

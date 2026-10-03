@@ -41,7 +41,7 @@ export default function SchedulePage() {
     <div className="flex flex-col gap-4">
       <PageTitle>Schedule</PageTitle>
       <ErrorLine error={error ?? err} />
-      <HandoffsCard />
+      {EXTRAS && <HandoffsCard />}
       {data && !data.items.length && <Card><Empty>No bookings in the next 30 days.</Empty></Card>}
       {[...byDay.entries()].map(([d, items]) => (
         <Card key={d} title={<>{d === today ? "Today" : d}<span className="ml-2 font-normal text-slate-500">{items.length}</span></>}>
@@ -71,7 +71,7 @@ export default function SchedulePage() {
                       {a.external_ref && <span className="text-xs text-slate-500">{a.external_ref.split(":")[0]}</span>}
                       {a.conversation_id && <Link className="text-xs font-medium text-brand-700 hover:underline" href={`/conversations/${a.conversation_id}`}>conversation</Link>}
                     </div>
-                    {past && a.status === "confirmed" && (a.outcome ? (
+                    {EXTRAS && past && a.status === "confirmed" && (a.outcome ? (
                       <div className="mt-2 flex items-center gap-2 text-xs">
                         <Badge tone={a.outcome === "attended" ? "green" : "red"}>{a.outcome === "attended" ? "came" : "no-show"}</Badge>
                         <button className="text-slate-500 underline" onClick={() => record(a, null)}>undo</button>
