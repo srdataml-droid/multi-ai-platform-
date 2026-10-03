@@ -10,7 +10,16 @@ import { usePoll } from "@/lib/usePoll";
 import { EXTRAS } from "@/lib/menu";
 
 type Prediction = { p: number; level: "likely" | "unsure" | "unlikely"; reasons: string[]; data: "real" | "synthetic" };
-type Proposal = { id: string; conversation_id: string | null; kind: string; params: Record<string, unknown>; risk: string; reason: string | null; created_at: string; prediction: Prediction | null };
+type CustomerContext = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  channel: string;
+  status: string;
+  summary: string | null;
+  intake: Record<string, unknown>;
+};
+type Proposal = { id: string; conversation_id: string | null; kind: string; params: Record<string, unknown>; risk: string; reason: string | null; created_at: string; prediction: Prediction | null; customer?: CustomerContext | null };
 type Threshold = { threshold: number; would_auto_approve: number; of_which_staff_did_not_approve: number; precision: number | null; share_of_queue: number | null };
 type Learning = {
   model: { data: string; trained_at: string; rows: number } | null;
@@ -18,6 +27,56 @@ type Learning = {
 };
 
 const pct = (x: number | null | undefined) => (x == null ? "-" : `${Math.round(x * 100)}%`);
+
+const intakeValue = (p: Proposal, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = p.customer?.intake?.[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+};
+
+function CustomerRequest({ p }: { p: Proposal }) {
+  if (!p.customer) return null;
+  const problem = intakeValue(p, "problem_type", "need", "service_type");
+  const detail = intakeValue(p, "symptom", "concern", "notes");
+  const location = intakeValue(p, "postcode", "address", "location");
+  const urgency = intakeValue(p, "urgency");
+  const preferred = intakeValue(p, "preferred_window", "preferred_time");
+  const facts = [
+    ["Problem", problem],
+    ["Details", detail],
+    ["Location", location],
+    ["Urgency", urgency],
+    ["Preferred", preferred],
+  ].filter(([, value]) => value);
+
+  return (
+    <div className="mb-3 rounded-xl bg-white p-3 ring-1 ring-inset ring-slate-200" data-testid={`customer-${p.id}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{p.customer.name || intakeValue(p, "name") || "Customer"}</div>
+          <div className="text-xs text-slate-500">
+            {[p.customer.phone, p.customer.email, p.customer.channel].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        {p.conversation_id && <Link className="text-xs font-medium text-brand-700 hover:underline" href={`/conversations/${p.conversation_id}`}>Open conversation</Link>}
+      </div>
+      {facts.length > 0 && (
+        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          {facts.map(([labelText, value]) => (
+            <div key={labelText} className="rounded-lg bg-slate-50 px-2.5 py-2">
+              <dt className="text-xs text-slate-500">{labelText}</dt>
+              <dd className="mt-0.5 text-slate-900">{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {p.customer.summary && <p className="mt-2 text-xs text-slate-500">{p.customer.summary}</p>}
+    </div>
+  );
+}
+
 
 // The approval model's guess for one proposal. Advice only: staff still decide.
 function Guess({ g }: { g: Prediction }) {
@@ -92,7 +151,7 @@ export default function ApprovalsPage() {
   const items = data?.items ?? [];
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle>Approvals{items.length > 0 && <span className="ml-2 text-base font-normal text-slate-600">{items.length}</span>}</PageTitle>
+      <PageTitle>Needs your decision{items.length > 0 && <span className="ml-2 text-base font-normal text-slate-600">{items.length}</span>}</PageTitle>
       <ErrorLine error={error ?? err} />
       {Object.entries(failed).map(([id, why]) => (
         <p key={id} data-testid="approval-failed" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-inset ring-red-200">
@@ -100,7 +159,7 @@ export default function ApprovalsPage() {
           <button className="ml-2 underline" onClick={() => setFailed((f) => { const n = { ...f }; delete n[id]; return n; })}>Dismiss</button>
         </p>
       ))}
-      {data && !items.length && <Card><Empty>All clear. Nothing to decide.</Empty></Card>}
+      {data && !items.length && <Card><Empty>All clear. Novaxis has nothing waiting for you.</Empty></Card>}
       {items.map((p) => (
         <Card key={p.id} title={kindLabel(p.kind)} actions={<Badge tone={p.risk === "high" ? "red" : p.risk === "low" ? "slate" : "amber"}>{p.risk} risk</Badge>}>
           <p className="-mt-1 mb-3 text-xs text-slate-500">
@@ -108,6 +167,7 @@ export default function ApprovalsPage() {
             {p.conversation_id && <> · <Link className="font-medium text-brand-700 hover:underline" href={`/conversations/${p.conversation_id}`}>open conversation</Link></>}
           </p>
           {EXTRAS && p.prediction && <Guess g={p.prediction} />}
+          <CustomerRequest p={p} />
           <dl className="mb-3 grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-slate-50 p-3 text-sm" data-testid={`summary-${p.id}`}>
             {summarise(p.params).map(([k, v]) => (
               <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="break-words text-slate-900">{v}</dd></div>
@@ -115,11 +175,11 @@ export default function ApprovalsPage() {
           </dl>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => decide(p, "approve")} disabled={busy === p.id}>Approve</Button>
-            <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Reject</Button>
+            <Button tone="danger" onClick={() => decide(p, "reject")} disabled={busy === p.id}>Decline</Button>
           </div>
           {editable(p.params).length > 0 && (
             <details className="mt-3 border-t border-slate-100 pt-3">
-              <summary className="cursor-pointer text-sm font-medium text-slate-600">Change details first</summary>
+              <summary className="cursor-pointer text-sm font-medium text-slate-600">Change before approving</summary>
               <div className="mt-3 flex flex-col gap-3">
                 {editable(p.params).map((k) => (
                   <label key={k} className="flex flex-col gap-1 text-sm">
@@ -127,7 +187,7 @@ export default function ApprovalsPage() {
                     <input data-testid={`edit-${p.id}-${k}`} value={editing[p.id]?.[k] ?? String(p.params[k] ?? "")} onChange={(e) => setEditing((s) => ({ ...s, [p.id]: { ...s[p.id], [k]: e.target.value } }))} />
                   </label>
                 ))}
-                <div><Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !changed(p.params, editing[p.id])}>Approve with changes</Button></div>
+                <div><Button tone="secondary" onClick={() => decide(p, "edit")} disabled={busy === p.id || !changed(p.params, editing[p.id])}>Save changes and approve</Button></div>
               </div>
             </details>
           )}
