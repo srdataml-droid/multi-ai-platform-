@@ -4,15 +4,22 @@ import { menuFor } from "../lib/menu.ts";
 
 const hrefs = (role: string, extras: boolean) => menuFor(role, false, extras).map((l) => l.href);
 
-test("the simple pilot exposes only the request-to-booking loop", () => {
+test("the default pilot exposes only the request-to-booking loop", () => {
   const expected = ["/inbox", "/approvals", "/schedule", "/settings"];
   assert.deepEqual(hrefs("owner", false), expected);
   assert.deepEqual(hrefs("staff", false), expected);
   assert.deepEqual(hrefs("viewer", false), expected);
 });
 
-test("extras do not add more top-level pilot pages", () => {
-  assert.deepEqual(hrefs("owner", true), ["/inbox", "/approvals", "/schedule", "/settings"]);
+test("extras restore the parked full product without a second codebase", () => {
+  assert.deepEqual(hrefs("owner", true), [
+    "/inbox", "/approvals", "/schedule", "/contacts", "/settings",
+    "/onboarding", "/billing", "/queue", "/analytics", "/stock",
+  ]);
+  assert.deepEqual(hrefs("staff", true), [
+    "/inbox", "/approvals", "/schedule", "/contacts", "/settings",
+    "/queue", "/analytics", "/stock",
+  ]);
 });
 
 test("the operator console shows only the businesses", () => {
