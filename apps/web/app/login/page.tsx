@@ -73,6 +73,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell title="Sign in" footer={cfg && cfg.mode !== "none" ? footer : null}>
+      <Link href="/demo" className="mb-5 block rounded-xl bg-brand-50 p-3 text-center text-sm font-medium text-brand-700">Try the account-free demo →</Link>
       <div role="radiogroup" aria-label="I am" className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
         {(["owner", "team"] as const).map((w) => (
           <button key={w} type="button" role="radio" aria-checked={who === w} onClick={() => choose(w)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium transition ${who === w ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
