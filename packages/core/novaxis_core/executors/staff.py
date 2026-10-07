@@ -115,3 +115,15 @@ def verify_claim(
 ) -> ExecResult:
     """Approval of a claim check means a person looked. Nothing else to do."""
     return ExecResult(True, {"verified": True})
+
+
+@executor("schedule_callback")
+def schedule_callback(
+    session: Session, tenant: Tenant, proposal: ActionProposal, params: Any
+) -> ExecResult:
+    conv = session.get(Conversation, conversation_id_of(proposal))
+    if conv is None:
+        return ExecResult(False, {}, "conversation not found")
+    # No message, provider call or calendar booking: the owner does the callback.
+    conv.status = "waiting_human"
+    return ExecResult(True, {"window": params.window, "outcome": "scheduled"})

@@ -25,6 +25,14 @@ def pack_raises(kind: str, params: dict[str, Any], ctx: GateContext) -> str | No
 
 
 CASES: list[tuple[str, str, dict[str, Any], dict[str, Any], tuple[str, str]]] = [
+    ("callback default", "schedule_callback", {"window": "Tomorrow"}, {}, ("medium", "awaiting")),
+    (
+        "callback cannot bypass human",
+        "schedule_callback",
+        {"window": "Tomorrow"},
+        {"overrides": {"schedule_callback": "low"}},
+        ("medium", "awaiting"),
+    ),
     # ---- defaults per kind ----
     ("reply default", "reply", {"text": "hi"}, {}, ("low", "auto_approved")),
     (

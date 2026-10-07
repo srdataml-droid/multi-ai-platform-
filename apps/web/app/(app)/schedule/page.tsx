@@ -39,7 +39,7 @@ export default function SchedulePage() {
   const small = "rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ring-inset ring-slate-300 hover:bg-slate-50";
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle>Schedule</PageTitle>
+      <PageTitle actions={<Link href="/callbacks" className="text-sm text-brand-700">Callback requests →</Link>}>Schedule</PageTitle>
       <ErrorLine error={error ?? err} />
       {EXTRAS && <HandoffsCard />}
       {data && !data.items.length && <Card><Empty>No bookings in the next 30 days.</Empty></Card>}
