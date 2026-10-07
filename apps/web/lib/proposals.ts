@@ -13,6 +13,7 @@ export const label = (k: string): string => LABELS[k] ?? k.replace(/_/g, " ");
 
 const KINDS: Record<string, string> = {
   reply: "Reply to send",
+  schedule_callback: "Callback request",
   propose_appointment: "Booking request",
   confirm_appointment: "Confirm booking",
   reschedule_appointment: "Move booking",

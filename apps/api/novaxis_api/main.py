@@ -18,6 +18,7 @@ from novaxis_api.routes_approvals import router as approvals_router
 from novaxis_api.routes_auth import router as auth_router
 from novaxis_api.routes_billing import router as billing_router
 from novaxis_api.routes_bridge import router as bridge_router
+from novaxis_api.routes_callbacks import router as callbacks_router
 from novaxis_api.routes_conversations import router as conversations_router
 from novaxis_api.routes_dashboard import router as dashboard_router
 from novaxis_api.routes_health import router as health_router
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     def version() -> dict[str, str]:
         return build_info()
 
+    app.include_router(callbacks_router)
     app.include_router(me_router)
     app.include_router(health_router)
     app.include_router(alerts_router)

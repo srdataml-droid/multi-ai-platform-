@@ -53,6 +53,11 @@ class ProposeAppointmentParams(_Params):
     notes: str = ""
 
 
+class ScheduleCallbackParams(_Params):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    window: str = Field(min_length=1, max_length=160)
+
+
 class ConfirmAppointmentParams(_Params):
     appointment_id: str
     service_code: str = ""
@@ -120,6 +125,13 @@ class ActionKind(BaseModel):
 ACTIONS: dict[str, ActionKind] = {
     a.name: a
     for a in (
+        ActionKind(
+            name="schedule_callback",
+            params=ScheduleCallbackParams,
+            default_risk="medium",
+            floor="medium",
+            description="Record a manual callback task after human approval",
+        ),
         ActionKind(
             name="reply",
             params=ReplyParams,

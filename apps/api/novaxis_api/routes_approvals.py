@@ -161,7 +161,9 @@ def decide_one(
 ) -> dict[str, Any]:
     if principal.role not in DECIDER_ROLES:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "viewers cannot decide proposals")
-    p = session.get(ActionProposal, proposal_id)
+    p = session.scalar(
+        select(ActionProposal).where(ActionProposal.id == proposal_id).with_for_update()
+    )
     if p is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such proposal")
     if p.state != "awaiting":
