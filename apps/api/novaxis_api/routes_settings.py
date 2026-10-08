@@ -363,7 +363,7 @@ def company_lab_chat(
                 "check-ups, hygiene visits and dental consultations, with sample "
                 "weekday hours 9am to 5pm. These are fictional facts, not a real business. "
                 "You have no tools and cannot book, send messages, access accounts or take "
-                "actions. Explain that booking requires connecting the Novaxis workflow. "
+                "actions. If asked to book, explain this demonstration cannot arrange real appointments. "
                 "Never claim an action occurred. Do not diagnose dental conditions, recommend treatments or medicines, or give hazardous "
                 "repair instructions. Do not request private patient or customer data."
             ),
