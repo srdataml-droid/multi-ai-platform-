@@ -16,6 +16,7 @@ const LINKS: MenuLink[] = [
   { href: "/schedule", label: "Schedule", icon: "calendar" },
   { href: "/contacts", label: "Contacts", icon: "users" },
   { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/assistant", label: "Assistant Studio", icon: "chat", roles: OWNERS },
   { href: "/onboarding", label: "Setup", icon: "rocket", roles: OWNERS },
   { href: "/billing", label: "Billing", icon: "card", roles: OWNERS },
   { href: "/queue", label: "Work queue", icon: "queue", extra: true },

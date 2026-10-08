@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { PhoneNumberField } from "@/components/PhoneNumberField";
 import { api, post } from "@/lib/api";
 
 type Hours = { open: string; close: string };
@@ -163,7 +164,7 @@ export default function OnboardingPage() {
     <div key="oncall" className="flex flex-col gap-3 text-sm">
       <p className="text-xs text-slate-500">Who the worker alerts for emergencies and anything it should not handle alone.</p>
       <label>Name<input className={input} value={w.on_call.name} onChange={(e) => patch({ on_call: { ...w.on_call, name: e.target.value } })} /></label>
-      <label>Mobile<input className={input} placeholder="+447700900123" value={w.on_call.phone ?? ""} onChange={(e) => patch({ on_call: { ...w.on_call, phone: e.target.value } })} /></label>
+      <PhoneNumberField value={w.on_call.phone} onChange={(phone) => patch({ on_call: { ...w.on_call, phone } })} />
       <label>Email<input className={input} value={w.on_call.email ?? ""} onChange={(e) => patch({ on_call: { ...w.on_call, email: e.target.value } })} /></label>
     </div>,
     <dl key="review" className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">

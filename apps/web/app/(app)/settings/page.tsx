@@ -213,14 +213,20 @@ export default function SettingsPage() {
         <p className="mt-2 text-xs text-slate-500">Team: replies and approvals. View only: reads, private answers hidden.</p>
       </Card>
       <Card id="widget" title="Website chat">
-        <p className="mb-2 text-xs text-slate-500">Paste before the closing body tag of your website.</p>
+        <p className="mb-2 text-sm">Connect Novaxis chat to another website:</p>
+        <ol className="mb-3 list-decimal space-y-1 pl-5 text-xs text-slate-600">
+          <li>Enter the website address below, such as <code>https://example.com</code>, then select <strong>Save all</strong>.</li>
+          <li>Paste the embed code below into that website before its closing <code>&lt;/body&gt;</code> tag.</li>
+          <li>Open the website as a visitor and send a test message. The conversation will appear in the Novaxis inbox.</li>
+        </ol>
         <pre data-testid="widget-snippet" className="overflow-x-auto rounded-xl bg-slate-900 p-3 text-xs text-slate-100">{snippet}</pre>
         <label className="mt-3 flex flex-col gap-1 text-sm">Websites allowed to show your chat
           <input data-testid="widget-origins" className="w-full" placeholder="https://www.yourbusiness.co.uk" value={((st.widget_origins as string[] | undefined) ?? []).join(", ")} onChange={(e) => update({ widget_origins: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
         </label>
         <p className="mt-1 text-xs text-slate-500">
-          {((st.widget_origins as string[] | undefined) ?? []).length ? "Only these websites can use your chat." : "Empty: any website could copy your chat. Add yours."}
+          {((st.widget_origins as string[] | undefined) ?? []).length ? "Only these websites and your Novaxis dashboard can use your chat. Use the website origin only, without a page path." : "No restriction is saved: any website can currently use your chat. Add your business website to restrict it."}
         </p>
+        <a href="/assistant#website-install" className="mt-3 inline-block text-xs font-medium text-brand-700 underline">Open the guided website setup in Assistant Studio →</a>
       </Card>
       <Card id="data" title="Customer data">
         <label className="flex flex-col gap-1 text-sm">Delete a customer after this many quiet days

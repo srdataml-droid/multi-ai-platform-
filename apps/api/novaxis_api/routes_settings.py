@@ -14,7 +14,7 @@ from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_api.routes_auth import sign_in_mode
 from novaxis_core.actions import ACTIONS, RISK_ORDER
 from novaxis_core.booking_types import encrypt_existing, sensitive_keys_for, starter_type
-from novaxis_core.models import AuditLog, Location, Tenant, User
+from novaxis_core.models import AuditLog, Location, Tenant, UsageEvent, User
 from novaxis_core.pack_registry import resolve_pack
 from novaxis_core.routing import claim_error, keep_routing
 from novaxis_core.security import hash_code, new_login_code
@@ -279,4 +279,36 @@ def widget_snippet(principal: CurrentPrincipal, session: TenantDb) -> dict[str, 
             f'data-api="{s.public_base_url}"></script>'
         ),
         "tenant": t.slug,
+    }
+
+
+@router.get("/assistant")
+def assistant_configuration(principal: CurrentPrincipal, session: TenantDb) -> dict[str, Any]:
+    """Safe model metadata, with observed worker usage kept distinct from API config."""
+    _require_owner(principal)
+    s = get_settings()
+    recent = session.scalar(
+        select(UsageEvent)
+        .where(
+            UsageEvent.tenant_id == principal.tenant_id,
+            UsageEvent.kind == "llm.worker_turn",
+            UsageEvent.model.is_not(None),
+        )
+        .order_by(UsageEvent.created_at.desc(), UsageEvent.id.desc())
+        .limit(1)
+    )
+    scripted = s.llm_provider == "fake"
+    return {
+        "provider": s.llm_provider,
+        "scripted": scripted,
+        "models": {
+            "responses": "fake" if scripted else s.model_worker,
+            "classification": "fake" if scripted else s.model_classify,
+            "summaries": "fake" if scripted else s.model_summarise,
+        },
+        "configuration_scope": "api_process",
+        "latest_worker_call": None if recent is None else {
+            "model": recent.model,
+            "at": recent.created_at.isoformat(),
+        },
     }

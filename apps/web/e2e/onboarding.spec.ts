@@ -28,9 +28,12 @@ test("sign up, onboard, pay, and the operator enters with an audit trail", async
     if (step === "Services") await shot(page, "03-wizard-services");
   }
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByLabel("Name").fill("Sam On-Call");
-  await page.getByLabel("Mobile").fill("+447700900123");
+  await page.getByLabel("Name", { exact: true }).fill("Sam On-Call");
+  await page.getByLabel("Country code").selectOption("GB");
+  await page.getByLabel("Mobile").fill("7700900123");
+  await expect(page.getByLabel("Mobile")).toHaveValue("7700900123");
   await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("+447700900123")).toBeVisible();
   await expect(page.getByText("Repair visit (90 min)")).toBeVisible();
   await shot(page, "04-wizard-review");
   await page.getByRole("button", { name: "Confirm and go live" }).click();
