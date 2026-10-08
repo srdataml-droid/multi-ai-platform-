@@ -107,3 +107,16 @@ context. No website import, customer long-term memory, or automatic learning is 
 Research sources appear in the Studio template panel. US industry sources support general
 workflows; existing UK dental intake and emergency rules remain unchanged. Future industries
 require explicit reviewed registry entries, their own pack and intake configuration.
+
+## Existing chat integration lab
+
+`/company-lab.html` is a fictional Northline HVAC site with its own chat interface.
+Disconnected mode has explicitly scripted, local replies and no booking capability.
+The user must enter a business slug and connect before any messages go to Novaxis.
+Connected mode calls the existing visitor webchat API through `/api`, retains the
+visitor token only in memory, and polls replies. It sends no staff credentials.
+It demonstrates replacing a chat backend while retaining the UI, not adding tools
+inside an independently running third-party AI agent. An external AI using its own
+reasoning must instead integrate the server-side agent API and approval tools.
+This lab shares the Novaxis origin; it is not proof of a separate-domain integration.
+New conversation clears local state, not persisted Novaxis inbox records.
