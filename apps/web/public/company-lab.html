@@ -16,10 +16,9 @@ function status(text){el('status').textContent=text;}
 function setBusy(value){busy=value;el('send').disabled=value;document.querySelectorAll('[data-message]').forEach(b=>b.disabled=value);}
 el('open-chat').addEventListener('click',()=>{const box=el('company-chat');box.hidden=!box.hidden;el('open-chat').setAttribute('aria-expanded',String(!box.hidden));if(!box.hidden)el('message').focus();});
 async function send(text){if(busy||!text.trim())return;add(text,true);el('message').value='';setBusy(true);status('Thinking…');
-try{let auth=null;try{auth=localStorage.getItem('novaxis:token');}catch{}
-if(!auth)throw new Error('This private demonstration needs the owner signed in to Novaxis in this browser.');
+try{
 const messages=[...history,{role:'user',content:text}].slice(-11);
-const response=await fetch('/api/settings/company-lab/chat',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json','Authorization':'Bearer '+auth},body:JSON.stringify({messages})});
+const response=await fetch('/api/settings/company-lab/public-chat',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages})});
 const data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'The assistant is unavailable. Please try again later.');
 add(data.reply,false);history=[...messages,{role:'assistant',content:data.reply}].slice(-10);status('AI reply received');
 }catch(error){status(error.message);}finally{setBusy(false);}}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -384,4 +384,45 @@ def company_lab_chat(
         unit="tokens", model=result.model,
         meta={"input_tokens": result.input_tokens, "output_tokens": result.output_tokens},
     ))
+    return {"reply": result.text, "model": result.model, "actions_enabled": False}
+
+
+@router.post("/company-lab/public-chat")
+def public_company_lab_chat(body: LabChatIn, request: Request) -> dict[str, Any]:
+    """Fictional company demonstration only; bounded public model use, no tenant data/tools."""
+    from novaxis_api.limits import client_ip, enforce
+    from novaxis_core.llm import build_llm
+
+    enforce((f"public-company-lab:{client_ip(request)}", 5, 60),
+            ("public-company-lab-total", 60, 86400))
+    if body.messages[-1].role != "user":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "end with a user message")
+    if get_settings().llm_provider == "fake":
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "a real model provider is not configured")
+    try:
+        result = build_llm().complete(
+            task="worker_turn",
+            system_stable=(
+                "You are the AI chat assistant for Dental First Aid, a fictional dental practice in "
+                "an integration lab. You can have general conversations and answer general "
+                "questions. Be friendly, accurate and concise. The sample company offers "
+                "check-ups, hygiene visits and dental consultations, with sample "
+                "weekday hours 9am to 5pm. These are fictional facts, not a real business. "
+                "You have no tools and cannot book, send messages, access accounts or take "
+                "actions. If asked to book, explain this demonstration cannot arrange real appointments. "
+                "Never claim an action occurred. Do not diagnose dental conditions, recommend treatments or medicines, or give hazardous "
+                "repair instructions. Do not request private patient or customer data."
+            ),
+            system_volatile="",
+            messages=[m.model_dump() for m in body.messages],
+            tools=None,
+            max_tokens=500,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The configured model did not respond. Check the server-side provider settings.",
+        ) from exc
+    if not result.text.strip():
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The model returned no reply; try again.")
     return {"reply": result.text, "model": result.model, "actions_enabled": False}
