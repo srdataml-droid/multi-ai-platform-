@@ -82,3 +82,28 @@ or change production settings from the browser.
 
 The Studio flow has not been tested against a live model or production business account.
 No deployment, provider switch, outbound email, or live customer submission was performed.
+
+
+## Industry profiles (8 October 2026)
+
+Signup already stores the chosen pack. Studio now resolves a versioned, explicitly registered
+industry template for HVAC, dental or property restoration through an owner/operator-only
+endpoint. Unsupported packs receive no invented industry template. Existing accounts use
+the same lookup without migration.
+
+The profile stores optional assistant name, personality and additional handoff preferences,
+plus owner-confirmed business details and pricing policy. Customisation enables only the
+optional behaviour fields. Disabling it preserves edits; business facts remain in context.
+An editing lock is a local UI convenience, not an authorization boundary. Reset restores
+industry behaviour while keeping saved facts and unrelated settings. Existing tone settings
+remain the baseline style. Industry prompts, emergency checks and action gates remain active.
+Onboarding preserves the profile. Settings storage remains tenant-scoped and validated.
+
+General industry background is marked as background, not company capabilities. Fields remain
+blank until the owner confirms them. Calendar availability is never inferred from these text
+fields. The profile is loaded on built-in worker turns; external agents manage their own
+context. No website import, customer long-term memory, or automatic learning is introduced.
+
+Research sources appear in the Studio template panel. US industry sources support general
+workflows; existing UK dental intake and emergency rules remain unchanged. Future industries
+require explicit reviewed registry entries, their own pack and intake configuration.

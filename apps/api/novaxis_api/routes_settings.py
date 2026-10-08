@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from novaxis_api.auth import CurrentPrincipal, TenantDb
 from novaxis_api.routes_auth import sign_in_mode
 from novaxis_core.actions import ACTIONS, RISK_ORDER
+from novaxis_core.assistant_templates import template_for
 from novaxis_core.booking_types import encrypt_existing, sensitive_keys_for, starter_type
 from novaxis_core.models import AuditLog, Location, Tenant, UsageEvent, User
 from novaxis_core.pack_registry import resolve_pack
@@ -312,3 +313,10 @@ def assistant_configuration(principal: CurrentPrincipal, session: TenantDb) -> d
             "at": recent.created_at.isoformat(),
         },
     }
+
+
+@router.get("/assistant-template")
+def read_assistant_template(principal: CurrentPrincipal, session: TenantDb) -> dict[str, Any]:
+    _require_owner(principal)
+    t = _tenant(session)
+    return template_for(t.pack_id)

@@ -68,7 +68,7 @@ def save(body: dict[str, Any], principal: CurrentPrincipal, session: TenantDb) -
     # Keep what the wizard does not ask about (risk overrides, tone, pack settings).
     kept = {
         k: t.settings[k]
-        for k in ("risk_overrides", "tone", "disclosure_text", "pack")
+        for k in ("risk_overrides", "tone", "disclosure_text", "pack", "assistant_profile")
         if k in t.settings
     }
     t.settings = {**built.model_dump(), **kept}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, put } from "@/lib/api";
 import { Badge, Button, Card, ErrorLine } from "@/components/ui";
+import { BusinessAgentProfile } from "@/components/BusinessAgentProfile";
 import { WebsiteChatSetup } from "@/components/WebsiteChatSetup";
 
 type Configuration = {
@@ -180,6 +181,7 @@ export default function AssistantStudioPage() {
         </Card>
       </div>
     </div>}
+    {business && <BusinessAgentProfile />}
     {business && <WebsiteChatSetup key={business.tenant.slug} origins={business.settings.widget_origins || []} snippet={snippet} onSave={async (origins) => {
       const current = await api<Business>("/settings");
       const result = await put<Business>("/settings", { settings: { ...current.settings, widget_origins: origins } });

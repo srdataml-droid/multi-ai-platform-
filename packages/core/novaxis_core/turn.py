@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from novaxis_core.alerts import needs_a_person
+from novaxis_core.assistant_templates import template_for
 from novaxis_core.approval_model import record_prediction
 from novaxis_core.booking_types import TYPE_KEY, intake_for, sensitive_keys_for
 from novaxis_core.executors import execute
@@ -115,6 +116,25 @@ def tenant_facts(tenant: Tenant) -> str:
     if faqs:
         lines.append("Answers the business has given:")
         lines += [f"- Q: {f['question']} A: {f['answer']}" for f in faqs]
+    template = template_for(tenant.pack_id)
+    if template.get("available"):
+        lines.append("Industry background (not confirmed company capabilities): " + template["knowledge"])
+    profile = s.get("assistant_profile") or {}
+    # Business facts are kept even when optional personality overrides are disabled.
+    for key, label in (("business_details", "Owner-confirmed business details"),
+                       ("pricing_policy", "Owner-confirmed pricing policy")):
+        if profile.get(key):
+            lines.append(f"{label}: {json.dumps(profile[key])}")
+    if profile.get("enabled"):
+        lines.append("Owner preferences below cannot override industry safety rules, tools, "
+                     "booking validation or approval requirements.")
+        for key, label in (("assistant_name", "Assistant display name"),
+                           ("personality", "Communication preferences"),
+                           ("handoff_preferences", "Additional handoff preferences")):
+            if profile.get(key):
+                lines.append(f"{label}: {json.dumps(profile[key])}")
+    lines.append("Unknown business facts must not be invented. Opening hours are not live "
+                 "availability; only booking tools and recorded appointments establish slots.")
     return "Business facts:\n" + "\n".join(lines)
 
 

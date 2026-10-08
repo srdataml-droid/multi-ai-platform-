@@ -144,6 +144,18 @@ class ChannelConfig(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class AssistantProfile(BaseModel):
+    """Owner-approved preferences; industry instructions and action gates still apply."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    assistant_name: str = Field(default="", max_length=80)
+    personality: str = Field(default="", max_length=1500)
+    business_details: str = Field(default="", max_length=4000)
+    pricing_policy: str = Field(default="", max_length=2000)
+    handoff_preferences: str = Field(default="", max_length=1500)
+
+
 class TenantSettings(BaseModel):
     """Everything a tenant can configure without a code change."""
 
@@ -177,6 +189,7 @@ class TenantSettings(BaseModel):
         default_factory=dict, description="action kind -> risk, within the pack's allowed range"
     )
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
+    assistant_profile: AssistantProfile = Field(default_factory=AssistantProfile)
     tone: str = "friendly, brief, plain English"
     disclosure_text: str = (
         "Hi, I'm the AI assistant for {business_name}. A member of the team can step in "
