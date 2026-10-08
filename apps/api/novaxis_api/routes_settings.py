@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -320,3 +320,68 @@ def read_assistant_template(principal: CurrentPrincipal, session: TenantDb) -> d
     _require_owner(principal)
     t = _tenant(session)
     return template_for(t.pack_id)
+
+
+class LabMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class LabChatIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messages: list[LabMessage] = Field(min_length=1, max_length=12)
+
+
+@router.post("/company-lab/chat")
+def company_lab_chat(
+    body: LabChatIn, principal: CurrentPrincipal, session: TenantDb
+) -> dict[str, Any]:
+    """Owner-only generic company chat. No tools, inbox writes or booking side effects."""
+    from datetime import UTC, datetime
+
+    from novaxis_api.limits import enforce
+    from novaxis_core.billing import trial_block_reason
+    from novaxis_core.llm import build_llm
+
+    _require_owner(principal)
+    t = _tenant(session)
+    enforce((f"company-lab:{t.id}", 10, 60), (f"company-lab-day:{t.id}", 60, 86400))
+    if trial_block_reason(session, t, datetime.now(UTC)):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "the trial has ended")
+    if body.messages[-1].role != "user":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "end with a user message")
+    if get_settings().llm_provider == "fake":
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "a real model provider is not configured")
+    try:
+        result = build_llm().complete(
+            task="worker_turn",
+            system_stable=(
+                "You are the AI chat assistant for Northline, a fictional HVAC company in "
+                "an integration lab. You can have general conversations and answer general "
+                "questions. Be friendly, accurate and concise. The sample company offers "
+                "repair enquiries, maintenance and installation estimates, with sample "
+                "weekday hours 9am to 5pm. These are fictional facts, not a real business. "
+                "You have no tools and cannot book, send messages, access accounts or take "
+                "actions. Explain that booking requires connecting the Novaxis workflow. "
+                "Never claim an action occurred. Do not diagnose faults or give hazardous "
+                "repair instructions. Do not request private patient or customer data."
+            ),
+            system_volatile="",
+            messages=[m.model_dump() for m in body.messages],
+            tools=None,
+            max_tokens=500,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The configured model did not respond. Check the server-side provider settings.",
+        ) from exc
+    if not result.text.strip():
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The model returned no reply; try again.")
+    session.add(UsageEvent(
+        tenant_id=t.id, kind="llm.company_lab", quantity=result.input_tokens + result.output_tokens,
+        unit="tokens", model=result.model,
+        meta={"input_tokens": result.input_tokens, "output_tokens": result.output_tokens},
+    ))
+    return {"reply": result.text, "model": result.model, "actions_enabled": False}

@@ -111,10 +111,10 @@ require explicit reviewed registry entries, their own pack and intake configurat
 ## Existing chat integration lab
 
 `/company-lab.html` is a fictional Northline HVAC site with its own chat interface.
-Disconnected mode has explicitly scripted, local replies and no booking capability.
+Disconnected mode now uses an owner-authenticated generic model endpoint with no tools or booking capability. It reuses the configured server-side model, enforces 10 calls/minute and 60/day per business, checks the trial and records token usage. No public model relay or client-side provider key is introduced.
 The user must enter a business slug and connect before any messages go to Novaxis.
 Connected mode calls the existing visitor webchat API through `/api`, retains the
-visitor token only in memory, and polls replies. It sends no staff credentials.
+visitor token only in memory, and polls replies. Connected visitor mode sends no staff credentials. Generic mode uses the existing Novaxis owner session with the first-party API.
 It demonstrates replacing a chat backend while retaining the UI, not adding tools
 inside an independently running third-party AI agent. An external AI using its own
 reasoning must instead integrate the server-side agent API and approval tools.
