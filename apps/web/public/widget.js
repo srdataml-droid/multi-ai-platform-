@@ -1,90 +1,44 @@
-/* Novaxis web-chat widget. One file, no dependencies.
-   <script src="https://YOUR-WEB-HOST/widget.js" data-tenant="demo-hvac" data-api="https://YOUR-API-HOST"></script>
-   Visitors get a signed token on first message; it lives in localStorage so a
-   returning visitor threads into the same conversation. No personal data is stored.
-   Voice: where the browser supports it, the mic button turns speech into the message and
-   the speaker button reads replies aloud. Both run in the visitor's browser (Web Speech
-   API): no audio reaches our servers, only the text, exactly as if typed. */
+/* Novaxis visitor widget. Business identity is public; provider/staff keys never enter it.
+   Conversation token is stored per API and business. Speech input uses the browser's
+   speech service, which may process audio remotely depending on the browser. */
 (function () {
-  var script = document.currentScript;
-  var tenant = script.getAttribute("data-tenant");
-  var api = (script.getAttribute("data-api") || "").replace(/\/$/, "");
-  if (!tenant) return;
-  var key = "novaxis:" + tenant + ":visitor";
-  var token = null;
-  try { token = localStorage.getItem(key); } catch {}
-  var lastId = null, loaded = false;
-
-  var css = "#nvx-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:28px;border:0;background:#1f2937;color:#fff;font-size:24px;cursor:pointer;z-index:99999}" +
-    "#nvx-box{position:fixed;right:20px;bottom:88px;width:340px;max-width:calc(100vw - 40px);height:440px;max-height:70vh;background:#fff;border:1px solid #d1d5db;border-radius:12px;display:none;flex-direction:column;font:14px system-ui,sans-serif;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,.15)}" +
-    "#nvx-log{flex:1;overflow:auto;padding:12px}.nvx-m{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;white-space:pre-wrap}.nvx-in{background:#e5e7eb;margin-left:auto}.nvx-out{background:#dbeafe}" +
-    "#nvx-form{display:flex;border-top:1px solid #e5e7eb}#nvx-form input{flex:1;border:0;padding:12px;font:inherit}#nvx-form button{border:0;background:#1f2937;color:#fff;padding:0 16px;cursor:pointer}" +
-    "#nvx-form .nvx-icon{background:#fff;color:#1f2937;padding:0 10px;font-size:18px}#nvx-form .nvx-on{background:#dbeafe}";
-  var style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
-  var btn = document.createElement("button"); btn.id = "nvx-btn"; btn.textContent = "\u{1F4AC}"; btn.title = "Chat with us";
-  var box = document.createElement("div"); box.id = "nvx-box";
-  box.innerHTML = '<div id="nvx-log"></div><form id="nvx-form"><input placeholder="Type a message" autocomplete="off"><button type="button" class="nvx-icon" id="nvx-speak" title="Read replies aloud" hidden>\u{1F508}</button><button type="button" class="nvx-icon" id="nvx-mic" title="Speak your message" hidden>\u{1F3A4}</button><button type="submit">Send</button></form>';
-  document.body.appendChild(btn); document.body.appendChild(box);
-  var log = box.querySelector("#nvx-log"), form = box.querySelector("#nvx-form"), input = form.querySelector("input");
-
-  function add(dir, body) {
-    var d = document.createElement("div"); d.className = "nvx-m " + (dir === "inbound" ? "nvx-in" : "nvx-out"); d.textContent = body; log.appendChild(d); log.scrollTop = log.scrollHeight;
+  'use strict';
+  var script=document.currentScript, tenant=script&&script.getAttribute('data-tenant');
+  if(!tenant||document.getElementById('nvx-btn'))return;
+  var api=(script.getAttribute('data-api')||'').replace(/\/$/,''), key='novaxis:'+api+':'+tenant+':visitor';
+  var token=null, lastId=null, loaded=false, busy=false, polling=false, waiting=false, waitingSince=0, configured=false;
+  var seen=new Set();try{token=localStorage.getItem(key);}catch(e){}
+  var style=document.createElement('style');style.textContent=`
+#nvx-btn{position:fixed;right:24px;bottom:24px;display:flex;align-items:center;gap:10px;padding:16px 20px;border:0;border-radius:100px;background:#183f35;color:#fff;box-shadow:0 8px 28px #143e3533;font:600 14px system-ui,sans-serif;cursor:pointer;z-index:2147483000}
+#nvx-box{position:fixed;right:24px;bottom:94px;width:380px;max-width:calc(100vw - 32px);height:560px;max-height:calc(100dvh - 120px);display:none;flex-direction:column;border:1px solid #dce5df;border-radius:22px;overflow:hidden;background:#fff;color:#20332d;font:14px/1.5 system-ui,sans-serif;box-shadow:0 20px 70px #172f3433;z-index:2147483000;text-align:left}
+#nvx-box *{box-sizing:border-box}#nvx-box button,#nvx-box input{font:inherit}#nvx-head{background:#183f35;color:white;padding:20px;display:flex;align-items:flex-start;gap:12px}#nvx-avatar{display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;border-radius:14px;background:#ffffff1f;font-size:22px}#nvx-title{font-size:16px;font-weight:700;overflow-wrap:anywhere}#nvx-subtitle{font-size:12px;color:#d1e7dc;margin-top:3px}#nvx-close{margin-left:auto;background:transparent;color:white;border:0;padding:0 4px;cursor:pointer;font-size:24px!important}
+#nvx-log{flex:1;min-height:80px;overflow:auto;padding:18px;background:#fafbf8;display:flex;flex-direction:column;gap:12px}.nvx-m{padding:11px 14px;border-radius:16px;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere}.nvx-in{align-self:flex-end;background:#183f35;color:white;border-bottom-right-radius:4px}.nvx-out{align-self:flex-start;background:#edf1eb;color:#20332d;border-bottom-left-radius:4px}#nvx-welcome{margin:auto 0;padding:14px 0;color:#51655c}#nvx-welcome strong{display:block;font-size:19px;color:#20332d;margin-bottom:8px}
+#nvx-quick{display:flex;flex-wrap:wrap;gap:6px;padding:12px 15px 4px}#nvx-quick button{border:1px solid #dce5df;border-radius:100px;background:white;color:#294e40;padding:7px 11px;font-size:12px;cursor:pointer}#nvx-status{min-height:24px;padding:5px 17px;color:#66786d;font-size:12px}#nvx-status[data-error=true]{color:#a23429}#nvx-form{display:flex;align-items:center;gap:6px;margin:0 12px;padding:7px;border:1px solid #dce5df;border-radius:13px;background:white}#nvx-form input{width:0;flex:1;border:0;outline:none;padding:7px;color:#20332d;background:white;min-height:32px}#nvx-form button{border:0;border-radius:9px;background:#183f35;color:white;padding:9px 12px;cursor:pointer}#nvx-form .nvx-icon{background:#eef3ed;color:#294e40;padding:8px}#nvx-form .nvx-on{background:#cee6d9}#nvx-box button:disabled{opacity:.45;cursor:default}#nvx-box button:focus-visible,#nvx-btn:focus-visible,#nvx-form input:focus-visible{outline:2px solid #79b893;outline-offset:2px}#nvx-footer{text-align:center;color:#79897d;font-size:11px;padding:9px 15px 12px}#nvx-box [hidden]{display:none!important}@media(max-width:480px){#nvx-box{right:12px;bottom:88px;width:calc(100vw - 24px);max-height:calc(100dvh - 105px)}#nvx-btn{right:16px;bottom:18px}}@media(prefers-reduced-motion:no-preference){#nvx-btn{transition:background .15s}#nvx-btn:hover{background:#275b49}}
+`;
+  document.head.appendChild(style);
+  var btn=document.createElement('button');btn.id='nvx-btn';btn.type='button';btn.textContent='✦ Chat with us';btn.setAttribute('aria-expanded','false');btn.setAttribute('aria-controls','nvx-box');
+  var box=document.createElement('section');box.id='nvx-box';box.setAttribute('role','dialog');box.setAttribute('aria-label','Business AI chat');
+  box.innerHTML='<div id="nvx-head"><div id="nvx-avatar" aria-hidden="true">✦</div><div><div id="nvx-title">Business assistant</div><div id="nvx-subtitle">AI assistant · enquiries & booking requests</div></div><button id="nvx-close" type="button" aria-label="Close chat">×</button></div><div id="nvx-log" role="log" aria-live="polite" aria-label="Chat messages"><div id="nvx-welcome"><strong>How can we help?</strong>Ask about our services or request a visit. A member of the team can help when needed.</div></div><div id="nvx-quick"><button type="button" data-message="What services do you offer?">Services</button><button type="button" data-message="When are you open?">Opening hours</button><button type="button" data-message="I would like to request an appointment.">Request a visit</button></div><div id="nvx-status" role="status"></div><form id="nvx-form"><input aria-label="Your message" placeholder="Type your message…" maxlength="4000" autocomplete="off" required><button type="button" class="nvx-icon" id="nvx-speak" title="Read replies aloud" aria-pressed="false" hidden>🔊</button><button type="button" class="nvx-icon" id="nvx-mic" title="Speak using your browser speech service" hidden>🎤</button><button id="nvx-send" type="submit">Send</button></form><div id="nvx-footer">Powered by Novaxis · bookings follow business approval rules</div>';
+  document.body.appendChild(btn);document.body.appendChild(box);
+  var log=box.querySelector('#nvx-log'), form=box.querySelector('#nvx-form'), input=form.querySelector('input'), status=box.querySelector('#nvx-status'), welcome=box.querySelector('#nvx-welcome'), quick=box.querySelector('#nvx-quick'), sendBtn=box.querySelector('#nvx-send');
+  function state(text,error){status.textContent=text;status.dataset.error=error?'true':'false';}
+  function add(dir,text){welcome.hidden=true;var node=document.createElement('div');node.className='nvx-m '+(dir==='inbound'?'nvx-in':'nvx-out');node.textContent=text;log.appendChild(node);log.scrollTop=log.scrollHeight;}
+  function controls(){sendBtn.disabled=busy;quick.querySelectorAll('button').forEach(function(b){b.disabled=busy;});}
+  function read(r){if(!r.ok)return r.json().catch(function(){return {};}).then(function(d){throw new Error(typeof d.detail==='string'?d.detail:'Chat is unavailable. Please try again later.');});return r.json();}
+  function identity(){if(configured)return;fetch(api+'/inbound/webchat/'+encodeURIComponent(tenant)+'/config',{credentials:'omit',cache:'no-store'}).then(read).then(function(data){configured=true;var name=data.business_name||'Business assistant';box.querySelector('#nvx-title').textContent=name;box.setAttribute('aria-label',name+' AI chat');box.querySelector('#nvx-subtitle').textContent=(data.assistant_name?data.assistant_name+' · ':'')+'AI assistant';welcome.querySelector('strong').textContent='Welcome to '+name;}).catch(function(){state('Business details are unavailable. You can try sending an enquiry.',true);});}
+  var speaking=false, speakBtn=box.querySelector('#nvx-speak'), micBtn=box.querySelector('#nvx-mic');
+  function say(text){if(speaking&&window.speechSynthesis){var u=new SpeechSynthesisUtterance(text);u.lang='en-GB';window.speechSynthesis.speak(u);}}
+  if(window.speechSynthesis){speakBtn.hidden=false;speakBtn.onclick=function(){speaking=!speaking;speakBtn.classList.toggle('nvx-on',speaking);speakBtn.setAttribute('aria-pressed',String(speaking));if(!speaking)window.speechSynthesis.cancel();};}
+  var Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(Recognition){micBtn.hidden=false;micBtn.onclick=function(){var rec=new Recognition();rec.lang='en-GB';rec.interimResults=false;micBtn.disabled=true;state('Listening with your browser speech service…');rec.onresult=function(e){input.value=e.results[0][0].transcript;input.focus();state('Review your message, then send.');};rec.onerror=function(){state('Microphone unavailable. You can type your message instead.',true);};rec.onend=function(){micBtn.disabled=false;};try{rec.start();}catch(e){micBtn.disabled=false;state('Speech input unavailable. Please type instead.',true);}};}
+  function poll(){if(!token){loaded=true;return Promise.resolve();}if(polling)return Promise.resolve();polling=true;
+    return fetch(api+'/inbound/webchat/'+encodeURIComponent(tenant)+'/messages?visitor_token='+encodeURIComponent(token)+(lastId?'&after='+encodeURIComponent(lastId):''),{credentials:'omit',cache:'no-store'}).then(read).then(function(data){(data.messages||[]).forEach(function(m){if(seen.has(m.id))return;seen.add(m.id);if(m.direction==='outbound'||!loaded)add(m.direction,m.body);if(m.direction==='outbound'){waiting=false;state('');if(loaded)say(m.body);}lastId=m.id;});loaded=true;if(waiting&&Date.now()-waitingSince>30000)state('Your enquiry is saved. The reply is taking longer; the team may need to review it.');}).catch(function(){state('Unable to check replies. We will check again while this chat is open.',true);}).finally(function(){polling=false;});
   }
-
-  // --- Voice, in the browser only -------------------------------------------------------
-  var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var speakBtn = box.querySelector("#nvx-speak"), micBtn = box.querySelector("#nvx-mic");
-  var speakKey = "novaxis:" + tenant + ":speak", speaking = false;
-  try { speaking = localStorage.getItem(speakKey) === "1"; } catch {}
-  function say(text) {
-    if (!speaking || !window.speechSynthesis) return;
-    var u = new SpeechSynthesisUtterance(text); u.lang = "en-GB"; window.speechSynthesis.speak(u);
-  }
-  if (window.speechSynthesis) {
-    speakBtn.hidden = false; speakBtn.classList.toggle("nvx-on", speaking);
-    speakBtn.onclick = function () {
-      speaking = !speaking; speakBtn.classList.toggle("nvx-on", speaking);
-      try { localStorage.setItem(speakKey, speaking ? "1" : "0"); } catch {}
-      if (!speaking) window.speechSynthesis.cancel();
-    };
-  }
-  if (Recognition) {
-    micBtn.hidden = false;
-    micBtn.onclick = function () {
-      var rec = new Recognition(); rec.lang = "en-GB"; rec.interimResults = false; rec.maxAlternatives = 1;
-      micBtn.classList.add("nvx-on"); input.placeholder = "Listening…";
-      rec.onresult = function (e) { input.value = e.results[0][0].transcript; form.requestSubmit(); };
-      rec.onend = function () { micBtn.classList.remove("nvx-on"); input.placeholder = "Type a message"; };
-      rec.start();
-    };
-  }
-  function poll() {
-    // A new visitor has no history to load: everything from now on is new (and spoken).
-    if (!token) { loaded = true; return; }
-    var url = api + "/inbound/webchat/" + encodeURIComponent(tenant) + "/messages?visitor_token=" + encodeURIComponent(token) + (lastId ? "&after=" + encodeURIComponent(lastId) : "");
-    fetch(url).then(function (r) { return r.ok ? r.json() : { messages: [] }; }).then(function (data) {
-      // The first load after a page change shows the whole thread; later polls only replies.
-      (data.messages || []).forEach(function (m) {
-        if (m.direction === "outbound" || !loaded) add(m.direction, m.body);
-        if (m.direction === "outbound" && loaded) say(m.body);
-        lastId = m.id;
-      });
-      loaded = true;
-    }).catch(function () {});
-  }
-  btn.onclick = function () { box.style.display = box.style.display === "flex" ? "none" : "flex"; if (box.style.display === "flex") { input.focus(); poll(); } };
-  form.onsubmit = function (e) {
-    e.preventDefault();
-    var text = input.value.trim(); if (!text) return; input.value = "";
-    add("inbound", text);
-    fetch(api + "/inbound/webchat/" + encodeURIComponent(tenant), {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: text, visitor_token: token, page: location.pathname })
-    }).then(function (r) { return r.json(); }).then(function (data) {
-      if (data.visitor_token) { token = data.visitor_token; try { localStorage.setItem(key, token); } catch {} }
-      if (data.message_id) lastId = data.message_id;
-    }).catch(function () { add("outbound", "Sorry, something went wrong sending that. Please try again."); });
+  function open(value){box.style.display=value?'flex':'none';btn.setAttribute('aria-expanded',String(value));if(value){identity();input.focus();poll();}else btn.focus();}
+  btn.onclick=function(){open(box.style.display!=='flex');};box.querySelector('#nvx-close').onclick=function(){open(false);};box.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});
+  quick.querySelectorAll('button').forEach(function(b){b.onclick=function(){input.value=b.getAttribute('data-message');form.requestSubmit();};});
+  form.onsubmit=function(e){e.preventDefault();var text=input.value.trim();if(!text||busy)return;busy=true;controls();input.value='';add('inbound',text);state('Sending…');
+    fetch(api+'/inbound/webchat/'+encodeURIComponent(tenant),{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:text,visitor_token:token,page:location.pathname})}).then(read).then(function(data){if(!data.visitor_token)throw new Error('The chat could not confirm delivery. Check for a reply before sending again.');token=data.visitor_token;try{localStorage.setItem(key,token);}catch(e){}if(data.message_id){lastId=data.message_id;seen.add(data.message_id);}loaded=true;waiting=true;waitingSince=Date.now();quick.hidden=true;state('Enquiry received · waiting for a reply…');return poll();}).catch(function(error){input.value=text;state(error.message+' Your message was not automatically resent.',true);}).finally(function(){busy=false;controls();});
   };
-  // Poll only while the chat is open: a closed widget on every page view costs nothing.
-  setInterval(function () { if (box.style.display === "flex") poll(); }, 3000);
+  setInterval(function(){if(box.style.display==='flex'&&document.visibilityState==='visible')poll();},4000);
 })();

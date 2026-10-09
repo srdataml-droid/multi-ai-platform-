@@ -120,3 +120,16 @@ inside an independently running third-party AI agent. An external AI using its o
 reasoning must instead integrate the server-side agent API and approval tools.
 This lab shares the Novaxis origin; it is not proof of a separate-domain integration.
 New conversation clears local state, not persisted Novaxis inbox records.
+
+## Refined visitor widget (9 October 2026)
+
+The widget now has a business-branded header, AI disclosure, welcome state, quick enquiries,
+mobile sizing, close/Escape controls, accessible labels, sending/waiting/error feedback and
+visible speech controls where supported. Speech input is reviewed before sending. Its public
+config endpoint returns only business identity, honours the existing website-origin check
+and rate limit, and exposes no tenant settings or contacts. Visitor tokens are scoped in
+browser storage by API host and business slug. Existing tokens under the former key are not
+migrated, so prior local sessions may start a new conversation after this update.
+
+Booking remains the existing worker/tool/approval workflow. Public identity does not imply
+calendar connectivity, live availability, staff presence or successful bookings.

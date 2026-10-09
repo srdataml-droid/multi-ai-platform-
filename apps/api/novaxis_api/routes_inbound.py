@@ -101,6 +101,23 @@ def _check_widget(tenant_slug: str, request: Request, visitor: str | None) -> No
             raise HTTPException(status.HTTP_403_FORBIDDEN, "this website may not use the widget")
 
 
+@router.get("/webchat/{tenant_slug}/config")
+def webchat_config(tenant_slug: str, request: Request) -> dict[str, Any]:
+    """Public widget identity only. No contacts, private settings or credentials."""
+    enforce((f"widget-config:{client_ip(request)}", 60, 600))
+    with service_session() as session:
+        tenant = resolve_tenant(session, "webchat", tenant_slug)
+        if tenant is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "this business chat is unavailable")
+        if not _origin_allowed(tenant, request.headers.get("origin")):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "this website may not use the widget")
+        profile = tenant.settings.get("assistant_profile") or {}
+        return {
+            "business_name": tenant.name,
+            "assistant_name": profile.get("assistant_name") if profile.get("enabled") else None,
+        }
+
+
 @router.post("/webchat/{tenant_slug}")
 async def webchat(tenant_slug: str, request: Request) -> dict[str, Any]:
     req = await _to_inbound_request(request)
