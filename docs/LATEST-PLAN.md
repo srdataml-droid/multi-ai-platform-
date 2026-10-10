@@ -10,6 +10,7 @@ This is persistent project context in the repository, not automatic cross-chat m
 
 ## Founder direction to preserve
 
+- **Do not delete existing Figma work.** Preserve all pages, screens and components; edit new clearly named copies. Explicit founder instruction on 10 October.
 - **UK HVAC businesses are the first users.** Build around the existing Novaxis application and unfinished Product UX v2 Figma file. Keep the shared core for later industries, with separate domain rules.
 - Work through focused senior disciplines: product strategy/research → UX → UI/design system and observability → software engineering → AI engineering → integrations → QA. Name the task, primary role, concrete output and completion evidence. Carry out the work; do not repeatedly substitute planning for implementation.
 - The assistant should relieve the office's operational workload: understand the requested visit, respond promptly, gather the necessary details, arrange accurate booking or handoff and keep outcomes clear.
@@ -54,7 +55,15 @@ The draft Figma evidence is preserved in the snapshot below. Browser input inter
 8. The suggested target segment (small teams, provisionally 2–15 staff), £249/month example, setup pricing and contribution estimates are **research hypotheses**, not founder-approved customer prices or measured profit. Vendor prices/terms and UK outreach rules are dated research to recheck before action.
 9. The shorthand “tg” was not resolved into a Telegram request. Do not create that integration based on the shorthand alone.
 
-## Next task — finish the request and feasibility flow
+## Latest verified UX continuation
+
+Read [the 10 October UX continuation](UK-HVAC-UX-continuation-2026-10-10.md) before further edits. Recovery `24:130` was reopened and visually verified as persisted. Existing request review `27:134` and feasibility `27:272` were visually inspected; their provenance was not established. The Figma AI reference approval screen `1:2492` was visually compared: retain separate approval, booking and notification outcomes.
+
+New recovery copy `40:144` was created and its selection verified at X=13184, Y=1600. It is **unfinished**, with template content and an unsuccessful rename. A standalone text layer named “@” appeared during the failed rename sequence; preserve and inspect it. Browser navigation, screenshot and inventory subsequently failed. Persistence of this new copy after reload is unverified. Reconnect and inspect that exact node before any further duplication. No original was deleted or intentionally edited.
+
+Current next task: finish the uncertain-provider-result state in that copy, then design booked/message-failed recovery. Mobile parity, prototype paths, accessibility and runtime implementation remain open. The table and historical snapshot above describe the earlier checkpoint; this continuation supersedes its request/feasibility and recovery-persistence gaps only.
+
+## Next task — finish the outcome and recovery flow
 
 **Role:** senior UX/observability designer. **Inputs:** existing Figma components/draft, catalogue, booking contract and 19 scenarios. **Output:** editable request-review and engineer/travel feasibility screens, followed by confirmed, uncertain-result and booked/message-failed states across desktop/mobile.
 
