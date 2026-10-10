@@ -1,0 +1,142 @@
+{
+  "date": "2026-10-10",
+  "fileKey": "KlfBnaMKECl18mVmwXplnP",
+  "frameId": "24:130",
+  "frameName": "v3 · UK HVAC booking recovery",
+  "sourceFrame": "8:1299",
+  "method": "Editable frame duplicated and text updated through the Figma browser interface; source retained",
+  "verification": "Every recorded text edit read back from the selected Figma text layer; full layout visually inspected",
+  "limitations": [
+    "Design draft only",
+    "Prototype navigation not validated",
+    "App unchanged",
+    "No booking or customer message sent"
+  ],
+  "edits": [
+    {
+      "layerName": "Meta · WORKSPACE / BOOKING RECOVERY",
+      "text": "WORKSPACE / HVAC BOOKING RECOVERY",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-205&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Title · Approved request needs attention",
+      "text": "Heating visit needs review",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-206&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · The calendar connection expired before an eve",
+      "text": "The calendar is disconnected. Visit length, engineer and travel checks are also incomplete.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-207&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Business selector / Description",
+      "text": "UK HVAC pilot",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-137&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Section · Maya’s consultation is still a request",
+      "text": "Heating fault assessment",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-212&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Maya Chen · fictional customer",
+      "text": "Alex Taylor · fictional customer",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-216&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · New patient consultation · 30 minutes",
+      "text": "Gas boiler · no heating · visit length needs an estimate",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-219&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Label · Requested time",
+      "text": "Customer preference",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-221&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · 10 October 2026 · 10:30–11:00 BST",
+      "text": "Tuesday morning · preference only; no slot held",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-222&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Label · Practice",
+      "text": "Business",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-224&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Dental First Aid · Europe/London",
+      "text": "UK HVAC pilot · Europe/London",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-225&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Approval is recorded, but no slot is reserved",
+      "text": "Staff review needed. Reconnect, then check duration, engineer, both travel legs, breaks and leave.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-226&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Section · Message held",
+      "text": "Customer response draft",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-228&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · We have your appointment request. The practic",
+      "text": "We have your heating enquiry. The team needs to confirm the visit details before offering a time.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-229&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "24:264-layers-panel-row",
+      "text": "Unconfirmed · checks incomplete",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-213&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "24:265-layers-panel-row",
+      "text": "Draft · not sent",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-230&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Website chat · request DFA-1042",
+      "text": "Website chat · request HVAC-DEMO-1042",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-236&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Label · 09:43 · Staff approval",
+      "text": "09:43 · Staff review",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-238&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Jordan Lee reviewed the proposed time",
+      "text": "Visit estimate and engineer assignment still needed",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-239&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Connection expired · no event reference",
+      "text": "Disconnected · no booking result recorded",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-242&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Held until a calendar event is confirmed",
+      "text": "Response is a draft; no confirmation sent",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-245&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Section · Recover without duplicates",
+      "text": "Reconnect, then recheck",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-247&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Body · Reconnect the account, check the request ID f",
+      "text": "Reconnect, reconcile any booking result, then verify the estimate, qualified engineer, both travel legs, breaks and leave before confirming.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-248&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Meta · Prototype example only · no live calendar wri",
+      "text": "Fictional HVAC example · design only; no live booking or customer message.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-250&t=eU2SUkuvuscZJk9g-0"
+    },
+    {
+      "layerName": "Sidebar review reassurance",
+      "text": "The team reviews missing details before confirming a visit.",
+      "url": "https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/Novaxis-%25E2%2580%2594-Product-UX-v2?node-id=24-181&t=eU2SUkuvuscZJk9g-0"
+    }
+  ]
+}
