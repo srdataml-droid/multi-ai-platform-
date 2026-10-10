@@ -111,4 +111,3 @@ Related existing repository specification: [agent context, response quality and 
 ## Maintaining this record
 
 After work, update the date, agreed decisions, evidence, blockers and next concrete task here. Link a new dated snapshot when useful, preserving earlier records. If an earlier claim is disproved, correct this current page and record the evidence without silently rewriting history. Do not label planned capabilities as shipped, hypotheses as validated, or drafts as business-approved.
-
