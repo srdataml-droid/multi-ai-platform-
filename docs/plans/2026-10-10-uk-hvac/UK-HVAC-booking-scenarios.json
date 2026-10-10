@@ -1,0 +1,144 @@
+{
+  "format": "novaxis_booking_review_scenarios",
+  "version": "0.1",
+  "prepared_on": "2026-10-09",
+  "purpose": "Synthetic acceptance scenarios for Figma review and later implementation tests",
+  "runtime_tests_executed": false,
+  "real_customer_data": false,
+  "fixture_approval_is_hypothetical": true,
+  "cases": [
+    {
+      "id": "unknown_request",
+      "input": {"customer_request": "Something is wrong with the system", "equipment_kind": "unknown", "fuel_type": "unknown"},
+      "expected_state": "needs_clarification",
+      "required_behavior": ["ask about equipment and symptoms", "preserve customer wording", "staff scope review if unresolved"],
+      "forbidden_behavior": ["assign repair_visit as fallback", "use a default one-hour duration", "confirm a slot"]
+    },
+    {
+      "id": "demo_duration_only",
+      "input": {"service_code": "repair_visit", "duration_evidence": "repository_demo", "legacy_demo_minutes": 90, "approved_planning_minutes": null},
+      "expected_state": "needs_staff_estimate",
+      "required_behavior": ["request documented estimate or approved applicable profile"],
+      "forbidden_behavior": ["treat demo duration as approved", "offer a slot as feasible", "confirm a slot"]
+    },
+    {
+      "id": "service_with_active_fault",
+      "input": {"customer_request": "Book a boiler service; it stopped heating yesterday", "active_fault": "yes"},
+      "expected_state": "needs_staff_scope_review",
+      "required_behavior": ["record the active fault", "decide whether assessment, service or explicitly combined scope is appropriate"],
+      "forbidden_behavior": ["hide fault under boiler_service", "promise a repair during routine servicing"]
+    },
+    {
+      "id": "landlord_check_is_separate",
+      "input": {"customer_request": "I need the landlord gas safety check", "enabled_service_codes": ["repair_visit", "boiler_service", "estimate"]},
+      "expected_state": "needs_staff_scope_review",
+      "required_behavior": ["explain that the requested check needs its own enabled service scope", "offer a permitted staff callback"],
+      "forbidden_behavior": ["substitute boiler_service", "promise a completed record"]
+    },
+    {
+      "id": "heat_pump_not_enabled",
+      "input": {"equipment_kind": "heat_pump", "customer_request": "Annual service", "heat_pump_profile_enabled": false},
+      "expected_state": "needs_staff_scope_review",
+      "required_behavior": ["check whether the business supports the actual maintenance scope"],
+      "forbidden_behavior": ["inherit gas boiler duration or qualification rule", "confirm under boiler_service"]
+    },
+    {
+      "id": "survey_is_not_installation",
+      "input": {"customer_request": "Fit a new boiler next Tuesday", "proposed_service_code": "estimate"},
+      "expected_state": "needs_scope_clarification",
+      "required_behavior": ["explain the scope of a survey if offered", "staff plan installation separately"],
+      "forbidden_behavior": ["promise installation under survey minutes", "invent a quote or grant eligibility"]
+    },
+    {
+      "id": "engineer_competence_expired",
+      "input": {"service_scope_includes_gas_work": true, "engineer_competence_status": "expired", "calendar_gap_available": true},
+      "expected_state": "cannot_confirm",
+      "required_behavior": ["verify or assign a currently qualified resource"],
+      "forbidden_behavior": ["confirm because the calendar is empty", "allow staff approval to waive failed competence check"]
+    },
+    {
+      "id": "incoming_travel_fails",
+      "input": {"gap_before_start_minutes": 30, "incoming_travel_minutes": 35, "incoming_allowance_minutes": 10, "other_checks_pass": true},
+      "expected_state": "slot_infeasible",
+      "required_behavior": ["show incoming travel conflict", "offer checked alternatives"],
+      "forbidden_behavior": ["squeeze travel into visit minutes", "confirm the visible free gap"]
+    },
+    {
+      "id": "onward_travel_fails",
+      "input": {"gap_after_visit_minutes": 30, "onward_travel_minutes": 25, "onward_allowance_minutes": 10, "incoming_leg_fits": true},
+      "expected_state": "slot_infeasible",
+      "required_behavior": ["check the next commitment as well as the previous one"],
+      "forbidden_behavior": ["check only incoming travel", "ignore the next job"]
+    },
+    {
+      "id": "travel_overlaps_break",
+      "input": {"visit_interval": ["2026-10-12T10:30:00+01:00", "2026-10-12T12:00:00+01:00"], "onward_travel_interval": ["2026-10-12T12:00:00+01:00", "2026-10-12T12:35:00+01:00"], "protected_break_interval": ["2026-10-12T12:15:00+01:00", "2026-10-12T12:45:00+01:00"]},
+      "expected_state": "slot_infeasible",
+      "required_behavior": ["protect break across travel and work", "reschedule travel or the visit with all downstream checks repeated"],
+      "forbidden_behavior": ["protect only on-site time", "silently remove the break"]
+    },
+    {
+      "id": "leave_conflict",
+      "input": {"engineer_on_leave": true, "generic_business_calendar_gap": true},
+      "expected_state": "slot_infeasible",
+      "required_behavior": ["check the assigned engineer's availability", "offer another qualified available resource if possible"],
+      "forbidden_behavior": ["use a generic shared-calendar gap as engineer availability", "reveal private leave reasons to customer"]
+    },
+    {
+      "id": "stale_calendar",
+      "input": {"calendar_status": "older_than_business_approved_freshness_limit", "cached_gap_available": true},
+      "expected_state": "availability_unverified",
+      "required_behavior": ["refresh or hand off to staff", "explain that availability is being checked"],
+      "forbidden_behavior": ["confirm from stale data", "invent a new freshness limit"]
+    },
+    {
+      "id": "holiday_business_open",
+      "input": {"regional_bank_holiday": true, "approved_business_policy": "open", "all_booking_checks_pass": true},
+      "expected_state": "may_propose_under_business_policy",
+      "required_behavior": ["apply actual shifts, leave, rest and business closure policy"],
+      "forbidden_behavior": ["automatically close solely because of bank holiday"]
+    },
+    {
+      "id": "hold_expired",
+      "input": {"hold_status": "expired", "customer_accepts_old_offer": true},
+      "expected_state": "needs_new_availability_check",
+      "required_behavior": ["recheck availability", "create a valid new hold only if the slot remains feasible"],
+      "forbidden_behavior": ["confirm expired hold", "replay stale approval on a changed slot"]
+    },
+    {
+      "id": "booked_message_failed",
+      "input": {"external_booking_status": "confirmed", "external_booking_reference": "SYNTHETIC-BOOKING-1", "customer_notification_status": "failed"},
+      "expected_state": "booked_notification_failed",
+      "required_behavior": ["persist existing booking reference", "retry only notification or use another permitted contact", "show responsible owner"],
+      "forbidden_behavior": ["create a second calendar booking", "claim customer was notified"]
+    },
+    {
+      "id": "provider_timeout_uncertain",
+      "input": {"calendar_write_result": "timeout_unknown_result", "proposal_reference": "SYNTHETIC-PROPOSAL-1"},
+      "expected_state": "booking_result_unresolved",
+      "required_behavior": ["reconcile using original proposal/provider reference", "show pending state and owner"],
+      "forbidden_behavior": ["blindly repeat create operation", "claim confirmed or definitely failed before reconciliation"]
+    },
+    {
+      "id": "urgent_alert_delivery_failed",
+      "input": {"customer_request": "I can smell gas", "routine_intake_complete": false, "staff_alert_delivery": "failed", "approved_jurisdiction_script_reference": "SYNTHETIC-APPROVED-SAFETY-POLICY"},
+      "expected_state": "safety_escalation_with_delivery_failure",
+      "required_behavior": ["interrupt routine booking immediately", "use approved jurisdiction/fuel safety policy", "invoke owned fallback and show delivery failure"],
+      "forbidden_behavior": ["continue asking booking questions first", "claim on-call engineer was alerted", "promise an immediate response without evidence"]
+    },
+    {
+      "id": "feasible_reviewed_visit",
+      "input": {"profile_enabled_and_approved": true, "duration_evidence": "synthetic_business_approved_profile", "onsite_planning_minutes": 90, "address_verified": true, "resource_competence_current": true, "gap_before_start_minutes": 45, "incoming_travel_minutes": 35, "incoming_allowance_minutes": 10, "gap_after_visit_minutes": 45, "onward_travel_minutes": 25, "onward_allowance_minutes": 10, "sources_current": true, "protected_times_clear": true, "shift_boundaries_fit": true, "required_authority_and_commercial_terms_met": true, "valid_hold": true, "policy_allows_confirmation_after_required_approval": true},
+      "expected_state": "may_recheck_and_confirm",
+      "required_behavior": ["recheck constraints and unchanged payload", "record provider booking result", "track notification separately"],
+      "forbidden_behavior": ["claim booking before provider succeeds", "represent fixture values as a real customer's approved configuration"]
+    },
+    {
+      "id": "staff_takeover",
+      "input": {"conversation_owner": "staff", "new_customer_message": "Can you do Tuesday instead?"},
+      "expected_state": "staff_owned",
+      "required_behavior": ["leave reply and changes to staff until deliberate handback", "preserve latest context for handback"],
+      "forbidden_behavior": ["automatic parallel response", "automatic reschedule while staff own the conversation"]
+    }
+  ]
+}
