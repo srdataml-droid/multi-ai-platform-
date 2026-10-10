@@ -29,7 +29,7 @@ Primary discipline to continue: **senior UX/observability designer**.
 | Product/market | Desk research, positioning, distribution experiments, illustrative economics and pilot sales material prepared | Customer interviews, willingness to pay, actual tenant costs and paid pilot results |
 | Operating requirements | Travel/resource-aware assistant plan and reusable HVAC skill/booking contract prepared; skill installed and validated in the originating Codex environment | Runtime integration, business review and end-to-end verification |
 | Service catalogue | Six disabled draft profiles and 19 synthetic acceptance scenarios; JSON/reference/arithmetic checks passed | Business-approved work scope, timing evidence, fees, qualifications and tenant policies |
-| Figma | Reference compared; existing HVAC request/feasibility/recovery inspected. Two new editable recovery states completed and visually verified after reload; see latest continuation below | Feasible proposal and fully confirmed/delivered state, desktop/mobile parity, prototype/accessibility verification |
+| Figma | Reference compared; existing HVAC request/feasibility/recovery inspected. Two recovery states plus feasible proposal and confirmed/delivered desktop drafts visually verified after reload; see latest continuation below | Approval review/checking states, prototype navigation, mobile parity and accessibility verification |
 | Application | Existing source inspected; configurable service lengths, protected times and generic buffers found | No application changes from this planning/design work; route/resource constraints and known fallback behavior still need implementation |
 | Commercial/AI/integration | Pilot preparation and API-first/model-evaluation recommendation | No customer outreach, revenue validation, trained model, production feature verification or new server provisioning |
 
@@ -72,19 +72,27 @@ Two editable desktop drafts are now visually verified **after a successful Figma
 
 Read [verification, previews and remaining tasks](plans/2026-10-10-recovery-states/UK-HVAC-recovery-states-verified.md). Originals were preserved. Extra text layers were kept below the screens rather than deleted. Confirmed visit times, duration, approval and event are explicitly fictional examples, not business-approved evidence or real provider results.
 
-Current next task: design the feasible proposal and fully confirmed/delivered outcome, then verify prototype navigation, mobile and accessibility. Runtime implementation remains open. Historical snapshots above describe earlier checkpoints; use this section for current recovery-design status.
+The feasible proposal and confirmed/delivered outcome were subsequently completed in the checkpoint below. Runtime implementation remains open. Historical snapshots above describe earlier checkpoints.
 
-## Next task — finish the outcome and recovery flow
+### Proposal and confirmation — completed and reloaded
 
-**Role:** senior UX/observability designer. **Inputs:** existing Figma components/draft, catalogue, booking contract and 19 scenarios. **Output:** editable request-review and engineer/travel feasibility screens, followed by confirmed, uncertain-result and booked/message-failed states across desktop/mobile.
+Two further editable desktop drafts were visually verified after a successful reload:
 
-1. Review the persisted request/feasibility/recovery drafts and use new copies for changes.
-2. Build a feasible proposal with clearly labelled synthetic evidence for approved scope/duration, qualified engineer/crew, confirmed address, both routes, protected time and fresh sources.
-3. Add the fully confirmed/delivered outcome, preserving separate approval, calendar and notification evidence.
-4. Connect and verify the new-copy journey including unknown-result and message-only recovery; record prototype links and backend dependencies.
-5. Complete mobile parity and accessibility specifications. Then implement one coherent flow with tenant isolation, action gates and appropriate end-to-end checks.
+- [v5 · UK HVAC feasible proposal](https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/?node-id=44-154): an unbooked proposal with both travel legs, a protected break, engineer/crew, access/tools and fresh-source examples.
+- [v5 · UK HVAC confirmed and delivered](https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/?node-id=44-292): separate example approval, calendar event and customer delivery evidence.
 
-Completion evidence is inspected editable frames and verified paths against the scenarios, followed by implementation evidence. A plan, a screen inventory or a screenshot alone does not complete the full journey. Request business facts only when needed for activation; continue independent design/implementation work within the authorised scope.
+Read [verification and previews](plans/2026-10-10-proposal-confirmation/UK-HVAC-proposal-confirmation-verified.md). All facts and provider references are fictional fixtures; no real address, qualification or tenant approval policy was validated. Existing work was preserved. No booking or message was sent.
+
+## Next task — approval review and verified navigation
+
+**Role:** senior UX/observability designer. **Output:** editable intermediate approval review/checking states, then a verified copied-frame journey.
+
+1. Show the office the proposed action and current evidence before execution; reconcile actual tenant action-gate policy.
+2. Design fresh-check progress and stale-source/changed-feasibility failures. Review proposal must not imply guaranteed approval, booking or delivery.
+3. Connect and verify navigation across request, feasibility, proposal, approval, confirmed, unknown-result and message-only recovery states.
+4. Complete mobile parity and accessibility specifications, then implement one coherent flow with tenant isolation, action gates and end-to-end checks.
+
+The four latest desktop outcome/recovery drafts are persisted and visually inspected. Prototype navigation, mobile/accessibility and runtime behavior remain unverified. Request business facts when needed for activation; continue independent design work within the authorised scope.
 
 ## Saved discussion and deliverables
 
@@ -103,3 +111,4 @@ Related existing repository specification: [agent context, response quality and 
 ## Maintaining this record
 
 After work, update the date, agreed decisions, evidence, blockers and next concrete task here. Link a new dated snapshot when useful, preserving earlier records. If an earlier claim is disproved, correct this current page and record the evidence without silently rewriting history. Do not label planned capabilities as shipped, hypotheses as validated, or drafts as business-approved.
+
