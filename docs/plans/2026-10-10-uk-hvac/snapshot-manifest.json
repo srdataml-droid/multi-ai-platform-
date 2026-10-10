@@ -1,0 +1,80 @@
+{
+  "format": "novaxis_project_context_snapshot",
+  "saved_on": "2026-10-10",
+  "repository": "srdataml-droid/multi-ai-platform-",
+  "entry_point": "docs/LATEST-PLAN.md",
+  "record_count": 14,
+  "records": [
+    {
+      "path": "Novaxis-market-and-profit-strategy.md",
+      "bytes": 20611,
+      "sha256": "4c701676d5fcb34fba8f89605d6c05d634edf70ecb8e92c925efc230e8dfee26"
+    },
+    {
+      "path": "Novaxis-operational-assistant-plan.md",
+      "bytes": 19220,
+      "sha256": "525e30a89568db42a126145cb93fdd82bb2b90e36249037858e763fd6ae4feb8"
+    },
+    {
+      "path": "Novaxis-progress-report.md",
+      "bytes": 12276,
+      "sha256": "38d564aabde24a008afa0502a3e299591e77f9a8566fc893d154dd59a7dc6810"
+    },
+    {
+      "path": "Novaxis-work-plan.md",
+      "bytes": 11743,
+      "sha256": "398f3a919b8cc20539e55e6f544363497af664bea00c9071a420f36782b9cf3b"
+    },
+    {
+      "path": "skills/novaxis-hvac-operations/references/booking-contract.md",
+      "bytes": 3776,
+      "sha256": "f78a1914bc95b9d37a71ff0746c2e9d8268a4b3e041fa5565e78150bcbfeac37"
+    },
+    {
+      "path": "skills/novaxis-hvac-operations/SKILL.md",
+      "bytes": 7138,
+      "sha256": "eaaade7d96804c27641328d0617323fa3e1147d839be8f052920ce04f9f8c681"
+    },
+    {
+      "path": "UK-HVAC-app-and-sales-kit.md",
+      "bytes": 12390,
+      "sha256": "ec6c1890867d6b5fd176d860b5e643cabf5d5f0c060316faad188ff43fd694db"
+    },
+    {
+      "path": "UK-HVAC-booking-scenarios.json",
+      "bytes": 9596,
+      "sha256": "f220feeb269d123d6f6f6d27f773051b436203aaef4565d14285da973bdba608"
+    },
+    {
+      "path": "UK-HVAC-booking-UX-handoff.md",
+      "bytes": 11967,
+      "sha256": "e92b808d836b82c60ff1ff9cddc5ff11a4b4870ce2493ec989c28ea29f1f157b"
+    },
+    {
+      "path": "UK-HVAC-Figma-edits.json",
+      "bytes": 7564,
+      "sha256": "3696795cda8cb97e071938bb9077e87c34afc70bd29fd21707909d48db8ebccc"
+    },
+    {
+      "path": "UK-HVAC-Figma-recovery-handoff.md",
+      "bytes": 3045,
+      "sha256": "2f408c5720d8ce8b6b6c4cee980b8170e34fccc74b9eaa58c227286dd07fe572"
+    },
+    {
+      "path": "UK-HVAC-Figma-recovery-preview.jpg",
+      "bytes": 46167,
+      "sha256": "5ca1f33e407537771d06171e48489c67f5fd81008f1406af8910fb2f8cc2b0e2"
+    },
+    {
+      "path": "UK-HVAC-service-catalogue.json",
+      "bytes": 16916,
+      "sha256": "4c81a7079f9892daf324e2f487d56fe75eaa5cabf7d34bc27fdedc23a382bf02"
+    },
+    {
+      "path": "UK-HVAC-service-catalogue.md",
+      "bytes": 13385,
+      "sha256": "1052e0bb0dce83dab10576e7a3f05e958f13f1caa17c3bd5492d269101d8339f"
+    }
+  ],
+  "note": "Historical artifacts copied from prepared local deliverables. Checksums verify the saved snapshot; application and Figma behavior require separate verification."
+}
