@@ -29,11 +29,11 @@ Primary discipline to continue: **senior UX/observability designer**.
 | Product/market | Desk research, positioning, distribution experiments, illustrative economics and pilot sales material prepared | Customer interviews, willingness to pay, actual tenant costs and paid pilot results |
 | Operating requirements | Travel/resource-aware assistant plan and reusable HVAC skill/booking contract prepared; skill installed and validated in the originating Codex environment | Runtime integration, business review and end-to-end verification |
 | Service catalogue | Six disabled draft profiles and 19 synthetic acceptance scenarios; JSON/reference/arithmetic checks passed | Business-approved work scope, timing evidence, fees, qualifications and tenant policies |
-| Figma | Existing pages/layer inventory reviewed. One editable `v3 · UK HVAC booking recovery` draft recorded as created on 10 October; 25 text changes read back and composition visually checked | Full request/feasibility journey, remaining desktop/mobile states, prototype/accessibility verification and independent persistence check after reload |
+| Figma | Reference compared; existing HVAC request/feasibility/recovery inspected. Two new editable recovery states completed and visually verified after reload; see latest continuation below | Feasible proposal and fully confirmed/delivered state, desktop/mobile parity, prototype/accessibility verification |
 | Application | Existing source inspected; configurable service lengths, protected times and generic buffers found | No application changes from this planning/design work; route/resource constraints and known fallback behavior still need implementation |
 | Commercial/AI/integration | Pilot preparation and API-first/model-evaluation recommendation | No customer outreach, revenue validation, trained model, production feature verification or new server provisioning |
 
-The draft Figma evidence is preserved in the snapshot below. Browser input intermittently timed out; the final reload did not independently establish persistence. Read the change record and re-open the frame before making stronger claims. File/skill checks do not establish live product behavior.
+Earlier draft Figma evidence is preserved in the historical snapshot below. The later successful reload and visual checks are recorded in the latest continuation section. File/skill and design checks do not establish live product behavior.
 
 ## Exact product and design references
 
@@ -61,16 +61,27 @@ Read [the 10 October UX continuation](UK-HVAC-UX-continuation-2026-10-10.md) bef
 
 New recovery copy `40:144` was created and its selection verified at X=13184, Y=1600. It is **unfinished**, with template content and an unsuccessful rename. A standalone text layer named “@” appeared during the failed rename sequence; preserve and inspect it. Browser navigation, screenshot and inventory subsequently failed. Persistence of this new copy after reload is unverified. Reconnect and inspect that exact node before any further duplication. No original was deleted or intentionally edited.
 
-Current next task: finish the uncertain-provider-result state in that copy, then design booked/message-failed recovery. Mobile parity, prototype paths, accessibility and runtime implementation remain open. The table and historical snapshot above describe the earlier checkpoint; this continuation supersedes its request/feasibility and recovery-persistence gaps only.
+That interruption record is historical. The following verified continuation supersedes its unfinished-copy and persistence status.
+
+### Recovery design continuation — completed and reloaded
+
+Two editable desktop drafts are now visually verified **after a successful Figma reload**:
+
+- [v4 · UK HVAC booking result unknown](https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/?node-id=40-144), resumed copy `40:144`: check the original result before another booking or confirmation; retain office ownership and expose found/verified-absent/still-unknown outcomes.
+- [v4 · UK HVAC booked · message failed](https://www.figma.com/design/KlfBnaMKECl18mVmwXplnP/?node-id=43-151), new preserved copy `43:151`: calendar confirmation and failed delivery are separate; retry only the message, retaining the booked visit.
+
+Read [verification, previews and remaining tasks](plans/2026-10-10-recovery-states/UK-HVAC-recovery-states-verified.md). Originals were preserved. Extra text layers were kept below the screens rather than deleted. Confirmed visit times, duration, approval and event are explicitly fictional examples, not business-approved evidence or real provider results.
+
+Current next task: design the feasible proposal and fully confirmed/delivered outcome, then verify prototype navigation, mobile and accessibility. Runtime implementation remains open. Historical snapshots above describe earlier checkpoints; use this section for current recovery-design status.
 
 ## Next task — finish the outcome and recovery flow
 
 **Role:** senior UX/observability designer. **Inputs:** existing Figma components/draft, catalogue, booking contract and 19 scenarios. **Output:** editable request-review and engineer/travel feasibility screens, followed by confirmed, uncertain-result and booked/message-failed states across desktop/mobile.
 
-1. Re-open the recorded recovery draft and verify its persistence and editable layers.
-2. Extend intake/request review with customer wording, suggested scope, equipment/fuel, missing estimate, ownership, urgency and confirmed address.
-3. Design feasibility evidence for duration, qualified engineer/crew, source freshness, incoming/onward routes, allowances, breaks, leave and shifts. Unknown fields need an honest staff-review path; real timings are not needed to design that state.
-4. Connect confirmation, provider uncertainty and partial failure to recovery. Record exact frame/prototype links, verify layout and navigation, and identify backend dependencies.
+1. Review the persisted request/feasibility/recovery drafts and use new copies for changes.
+2. Build a feasible proposal with clearly labelled synthetic evidence for approved scope/duration, qualified engineer/crew, confirmed address, both routes, protected time and fresh sources.
+3. Add the fully confirmed/delivered outcome, preserving separate approval, calendar and notification evidence.
+4. Connect and verify the new-copy journey including unknown-result and message-only recovery; record prototype links and backend dependencies.
 5. Complete mobile parity and accessibility specifications. Then implement one coherent flow with tenant isolation, action gates and appropriate end-to-end checks.
 
 Completion evidence is inspected editable frames and verified paths against the scenarios, followed by implementation evidence. A plan, a screen inventory or a screenshot alone does not complete the full journey. Request business facts only when needed for activation; continue independent design/implementation work within the authorised scope.
